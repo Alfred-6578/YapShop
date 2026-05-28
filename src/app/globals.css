@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/* ================================================================== *
+ * YapShop theme — Tailwind v4
+ *
+ * Raw values live as plain custom properties and flip per [data-theme].
+ * @theme inline maps Tailwind's token names onto them — the `inline` part
+ * is what makes the generated utilities reference var(--x) at runtime, so
+ * switching themes by toggling [data-theme] actually re-colors everything.
+ * (Plain @theme would bake the dark values in at build time.)
+ * ================================================================== */
+
+/* ---- raw tokens: dark (default) ---------------------------------- */
+:root {
+  --ff-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --ff-mono: "Geist Mono", ui-monospace, "SF Mono", monospace;
+  --ff-display: "Bricolage Grotesque", var(--ff-sans);
+
+  --r-card: 12px;
+  --r-control: 8px;
+  --r-pill: 999px;
+
+  --bg: #0d0e10;
+  --panel: #111216;
+  --card: #16171b;
+  --card-hover: #1b1c21;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  --fg: #eceef0;
+  --fg-muted: #898e94;
+  --fg-subtle: #62666c;
+
+  --accent: #15c26a;
+  --accent-hover: #13b061;
+  --accent-fg: #04331b;
+  --accent-muted: rgba(21, 194, 106, 0.16);
+
+  --status-pending: #f0a92b;
+  --status-paid: #15c26a;
+  --status-shipped: #4c8df5;
+  --status-delivered: #5dcaa5;
+  --status-cancelled: #e24b4a;
+  --status-none: #6b7079;
+
+  /* type scale — plain vars; use as text-[length:var(--text-lg)] etc. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 15px;
+  --text-lg: 19px;
+  --text-xl: 22px;
+}
+
+/* ---- raw tokens: light override ---------------------------------- */
+[data-theme="light"] {
+  --bg: #f7f8f7;
+  --panel: #ffffff;
+  --card: #ffffff;
+  --card-hover: #f1f3f1;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+
+  --fg: #14171a;
+  --fg-muted: #5a6066;
+  --fg-subtle: #898e94;
+
+  --accent: #12a85b;
+  --accent-hover: #0f9351;
+  --accent-fg: #ffffff;
+  --accent-muted: rgba(18, 168, 91, 0.12);
+}
+
+/* ---- map onto Tailwind tokens (inline = runtime var references) --- */
+@theme inline {
+  --font-sans: var(--ff-sans);
+  --font-mono: var(--ff-mono);
+  --font-display: var(--ff-display);
+
+  --radius-card: var(--r-card);
+  --radius-control: var(--r-control);
+  --radius-pill: var(--r-pill);
+
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-muted: var(--accent-muted);
+
+  --color-status-pending: var(--status-pending);
+  --color-status-paid: var(--status-paid);
+  --color-status-shipped: var(--status-shipped);
+  --color-status-delivered: var(--status-delivered);
+  --color-status-cancelled: var(--status-cancelled);
+  --color-status-none: var(--status-none);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--ff-sans);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
