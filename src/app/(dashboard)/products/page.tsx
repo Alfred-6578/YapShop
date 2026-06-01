@@ -6,7 +6,7 @@ import Button from "@/components/ui/Button"
 import PageHeader from "@/components/products/PageHeader"
 import FilterBar, { type ProductStatusFilter } from "@/components/products/FilterBar"
 import ProductsTable from "@/components/products/ProductsTable"
-import ProductsPagination from "@/components/products/ProductsPagination"
+import Pagination from "@/components/ui/Pagination"
 import { MOCK_PRODUCTS } from "@/lib/products/mockData"
 
 const PAGE_SIZE = 10
@@ -66,7 +66,7 @@ const ProductsPage = () => {
         onStatusChange={setStatus}
       />
       <ProductsTable products={paged} emptyState={<NoMatches />} />
-      <ProductsPagination
+      <Pagination
         page={page}
         pageSize={PAGE_SIZE}
         totalItems={filtered.length}

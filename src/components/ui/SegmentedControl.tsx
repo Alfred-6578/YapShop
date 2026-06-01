@@ -18,7 +18,7 @@ const SegmentedControl = <T extends string>({
 }: Props<T>) => {
   return (
     <div
-      className={`inline-flex bg-card border border-border rounded-[8px] p-0.5 text-[11.5px] ${className}`}
+      className={`flex bg-card overflow-x-scroll border border-border rounded-[8px] p-0.5 text-[11.5px] ${className}`}
     >
       {options.map((opt) => {
         const selected = opt.value === value

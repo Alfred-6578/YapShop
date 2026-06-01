@@ -9,7 +9,7 @@ type Props = {
   onPageChange: (page: number) => void
 }
 
-const ProductsPagination = ({ page, pageSize, totalItems, onPageChange }: Props) => {
+const Pagination = ({ page, pageSize, totalItems, onPageChange }: Props) => {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize))
   const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1
   const to = Math.min(page * pageSize, totalItems)
@@ -56,4 +56,4 @@ const ProductsPagination = ({ page, pageSize, totalItems, onPageChange }: Props)
   )
 }
 
-export default ProductsPagination
+export default Pagination
