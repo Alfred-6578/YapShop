@@ -13,3 +13,19 @@ export function formatRelative(iso: string): string {
   const weeks = Math.floor(days / 7)
   return `${weeks}w ago`
 }
+
+/**
+ * Returns a compact duration string from a starting ISO timestamp to now
+ * (or to the optional endIso). "12m", "1h", "2d", "<1m" for very recent.
+ * Unlike formatRelative, no trailing " ago".
+ */
+export function formatDuration(fromIso: string, endIso?: string): string {
+  const end = endIso ? new Date(endIso).getTime() : Date.now()
+  const start = new Date(fromIso).getTime()
+  if (Number.isNaN(start) || Number.isNaN(end)) return ''
+  const delta = Math.max(0, end - start)
+  if (delta < 60_000) return '<1m'
+  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m`
+  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h`
+  return `${Math.floor(delta / 86_400_000)}d`
+}

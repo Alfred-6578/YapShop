@@ -25,7 +25,7 @@ const navItems = [
   { icon: <HiOutlineChatBubbleLeftEllipsis size={18} />, label: 'Conversations', href: '/conversations' },
   { icon: <LiaHeadsetSolid size={18} />, label: 'Handoffs', href: '/handoffs', badge: true },
   { icon: <HiOutlineIdentification size={18} />, label: 'Staff', href: '/staff' },
-  { icon: <HiOutlineChatBubbleLeftRight size={18} />, label: 'Inbox', href: '/inbox' },
+  // { icon: <HiOutlineChatBubbleLeftRight size={18} />, label: 'Inbox', href: '/inbox' },
 ]
 
 const Sidebar = () => {
