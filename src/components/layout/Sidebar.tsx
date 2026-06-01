@@ -18,7 +18,6 @@ import NavItem from './NavItem'
 import Avatar from '@/components/ui/Avatar'
 
 const navItems = [
-  { icon: <HiOutlineChatBubbleLeftRight size={18} />, label: 'Inbox', href: '/inbox' },
   { icon: <HiOutlineSquares2X2 size={18} />, label: 'Dashboard', href: '/dashboard' },
   { icon: <HiOutlineShoppingBag size={18} />, label: 'Orders', href: '/orders' },
   { icon: <HiOutlineCube size={18} />, label: 'Products', href: '/products' },
@@ -26,6 +25,7 @@ const navItems = [
   { icon: <HiOutlineChatBubbleLeftEllipsis size={18} />, label: 'Conversations', href: '/conversations' },
   { icon: <LiaHeadsetSolid size={18} />, label: 'Handoffs', href: '/handoffs', badge: true },
   { icon: <HiOutlineIdentification size={18} />, label: 'Staff', href: '/staff' },
+  { icon: <HiOutlineChatBubbleLeftRight size={18} />, label: 'Inbox', href: '/inbox' },
 ]
 
 const Sidebar = () => {
