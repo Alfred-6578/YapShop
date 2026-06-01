@@ -26,7 +26,7 @@ const tabs = [
 ]
 
 const moreItems = [
-  { icon: <HiOutlineChatBubbleLeftRight size={18} />, label: 'Inbox', href: '/inbox' },
+  // { icon: <HiOutlineChatBubbleLeftRight size={18} />, label: 'Inbox', href: '/inbox' },
   { icon: <HiOutlineCube size={18} />, label: 'Products', href: '/products' },
   { icon: <HiOutlineUsers size={18} />, label: 'Customers', href: '/customers' },
   { icon: <HiOutlineIdentification size={18} />, label: 'Staff', href: '/staff' },
