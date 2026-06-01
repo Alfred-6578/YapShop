@@ -11,6 +11,8 @@ export type StatusValue =
   | 'inactive'
   | 'completed'
   | 'failed'
+  | 'requested'
+  | 'resolved'
 
 type Props = {
   status: StatusValue
@@ -29,6 +31,8 @@ const styles: Record<StatusValue, string> = {
   inactive: 'bg-[rgba(107,112,121,0.22)] text-[#B8BDC4]',
   completed: 'bg-status-paid/15 text-status-paid',
   failed: 'bg-status-cancelled/15 text-status-cancelled',
+  requested: 'bg-status-pending/15 text-status-pending',
+  resolved: 'bg-status-paid/15 text-status-paid',
 }
 
 const StatusBadge = ({ status, label, className = '' }: Props) => {

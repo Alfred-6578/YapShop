@@ -1,7 +1,7 @@
 "use client"
 import React from 'react'
 
-type Option<T extends string> = { value: T; label: string }
+type Option<T extends string> = { value: T; label: React.ReactNode }
 
 type Props<T extends string> = {
   options: Option<T>[]
