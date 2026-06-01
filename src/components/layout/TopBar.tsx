@@ -25,10 +25,21 @@ const segmentLabels: Record<string, string> = {
 const cap = (s: string) =>
   segmentLabels[s] ?? s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Walk segments back-to-front and pick the first one that resolves to a known route label.
+ *  Stops dynamic ID segments (cust-tunde, ord-2841, edit, [staffId]) from leaking into the
+ *  page title — falls back to the nearest meaningful parent route instead. */
+const resolveTitleSegment = (segments: string[]): string | null => {
+  for (let i = segments.length - 1; i >= 0; i--) {
+    if (segmentLabels[segments[i]]) return segments[i]
+  }
+  return segments[segments.length - 1] ?? null
+}
+
 const TopBar = () => {
   const pathname = usePathname() ?? '/'
   const segments = pathname.split('/').filter(Boolean)
-  const title = segments.length ? cap(segments[segments.length - 1]) : 'Home'
+  const titleSegment = resolveTitleSegment(segments)
+  const title = titleSegment ? cap(titleSegment) : 'Home'
   const crumbs =
     segments.length === 0
       ? [{ label: 'Home' }]
