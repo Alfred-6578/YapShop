@@ -50,6 +50,7 @@
   --text-md: 15px;
   --text-lg: 19px;
   --text-xl: 22px;
+
 }
 
 /* ---- raw tokens: light override ---------------------------------- */
@@ -103,6 +104,10 @@
   --color-status-delivered: var(--status-delivered);
   --color-status-cancelled: var(--status-cancelled);
   --color-status-none: var(--status-none);
+
+  --breakpoint-vsm: 550px;
+  --breakpoint-tny: 450px;
+  --breakpoint-xsm: 385px;
 }
 
 body {
