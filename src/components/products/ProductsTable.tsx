@@ -1,25 +1,17 @@
 "use client"
 import React from 'react'
+import Link from 'next/link'
 import { HiPencilSquare } from 'react-icons/hi2'
 
 import Card from '@/components/ui/Card'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Thumbnail from '@/components/ui/Thumbnail'
+import type { Product } from '@/lib/products/mockData'
 
-export interface Product {
-  id: string
-  name: string
-  sku: string
-  tags: string[]
-  price: number
-  is_active: boolean
-  thumbnail_color: string
-  initials: string
-}
+export type { Product }
 
 type Props = {
   products: Product[]
-  onEdit?: (product: Product) => void
   emptyState?: React.ReactNode
 }
 
@@ -27,7 +19,7 @@ const GRID =
   'grid-cols-[36px_minmax(0,1fr)_max-content_max-content_20px] gap-2 px-3 ' +
   'vsm:grid-cols-[36px_minmax(0,1fr)_130px_76px_64px_24px] vsm:gap-3 vsm:px-3.5'
 
-const ProductsTable = ({ products, onEdit, emptyState }: Props) => {
+const ProductsTable = ({ products, emptyState }: Props) => {
   return (
     <Card padded={false}>
       <div className={`grid ${GRID} pt-2 pb-2 text-[10px] text-fg-subtle uppercase tracking-wide`}>
@@ -78,14 +70,13 @@ const ProductsTable = ({ products, onEdit, emptyState }: Props) => {
               <StatusBadge status={p.is_active ? 'active' : 'inactive'} />
             </div>
 
-            <button
-              type="button"
-              onClick={() => onEdit?.(p)}
+            <Link
+              href={`/products/${p.id}/edit`}
               aria-label={`Edit ${p.name}`}
               className="text-fg-subtle hover:text-fg cursor-pointer inline-flex items-center justify-center"
             >
               <HiPencilSquare size={14} />
-            </button>
+            </Link>
           </div>
         ))
       )}

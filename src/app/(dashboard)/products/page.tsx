@@ -53,7 +53,7 @@ const ProductsPage = () => {
           <Button
             variant="primary"
             icon={<HiPlus size={14} />}
-            onClick={() => {}}
+            href="/products/new"
           >
             New product
           </Button>
@@ -65,7 +65,7 @@ const ProductsPage = () => {
         status={status}
         onStatusChange={setStatus}
       />
-      <ProductsTable products={paged} onEdit={() => {}} emptyState={<NoMatches />} />
+      <ProductsTable products={paged} emptyState={<NoMatches />} />
       <ProductsPagination
         page={page}
         pageSize={PAGE_SIZE}
