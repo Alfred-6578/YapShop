@@ -5,25 +5,20 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { HiOutlineArrowPath, HiOutlineExclamationTriangle } from "react-icons/hi2"
 
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
-import ProductForm from "@/components/products/ProductForm"
-import { deleteProduct, getProduct, updateProduct } from "@/lib/api/products"
+import ProductActionBar from "@/components/products/ProductActionBar"
+import ProductHero from "@/components/products/ProductHero"
+import ProductMediaGallery from "@/components/products/ProductMediaGallery"
+import ProductDetailsCard from "@/components/products/ProductDetailsCard"
+import ProductOrganizationCard from "@/components/products/ProductOrganizationCard"
+import ProductVisibilityCard from "@/components/products/ProductVisibilityCard"
+import ProductMetaCard from "@/components/products/ProductMetaCard"
+import { deleteProduct, getProduct } from "@/lib/api/products"
 
-const EditProductPage = () => {
+const ProductDetailPage = () => {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { productId } = useParams<{ productId: string }>()
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-
-  const updateMutation = useMutation({
-    mutationFn: (values: Parameters<typeof updateProduct>[1]) =>
-      updateProduct(productId, values),
-    onSuccess: (product) => {
-      queryClient.setQueryData(["products", "detail", productId], product)
-      queryClient.invalidateQueries({ queryKey: ["products", "list"] })
-      queryClient.invalidateQueries({ queryKey: ["products", "search"] })
-      router.push("/products")
-    },
-  })
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteProduct(productId),
@@ -39,10 +34,6 @@ const EditProductPage = () => {
     queryKey: ["products", "detail", productId],
     queryFn: () => getProduct(productId),
     staleTime: 30_000,
-    // Skip refetch once the product has been deleted — removeQueries clears the
-    // cache, but this hook is still mounted until router.push unmounts the page,
-    // and without this gate React Query would immediately re-run getProduct on
-    // the deleted id and 404.
     enabled: !!productId && !deleteMutation.isSuccess,
   })
 
@@ -76,36 +67,36 @@ const EditProductPage = () => {
     )
   }
 
+  const product = productQuery.data
+
   return (
     <>
-      <ProductForm
-        mode="edit"
-        initialValues={productQuery.data}
-        onSubmit={(values) =>
-          updateMutation.mutate({
-            name: values.name,
-            price: values.price,
-            description: values.description || null,
-            sku: values.sku || null,
-            category_id: values.category_id || null,
-            is_active: values.is_active,
-            is_live: values.is_live,
-            tags: values.tags,
-            files: values.media
-              .map((m) => m.file)
-              .filter((f): f is File => Boolean(f)),
-          })
-        }
-        onCancel={() => router.push("/products")}
+      <ProductActionBar
+        product={product}
         onDelete={() => setConfirmingDelete(true)}
-        isSubmitting={updateMutation.isPending || deleteMutation.isPending}
-        submitError={updateMutation.error ?? deleteMutation.error}
+        isDeleting={deleteMutation.isPending}
       />
+
+      <div className="p-4 flex flex-col gap-3">
+        <ProductHero product={product} />
+
+        <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-3 items-start">
+          <div className="flex flex-col gap-3 min-w-0">
+            <ProductMediaGallery product={product} />
+            <ProductDetailsCard product={product} />
+            <ProductOrganizationCard product={product} />
+          </div>
+          <div className="flex flex-col gap-3 min-w-0">
+            <ProductVisibilityCard product={product} />
+            <ProductMetaCard product={product} />
+          </div>
+        </div>
+      </div>
 
       <ConfirmDialog
         open={confirmingDelete}
         destructive
-        title={`Delete ${productQuery.data.name}?`}
+        title={`Delete ${product.name}?`}
         message="This removes the product from your catalog. Existing orders that reference it stay intact. This can't be undone."
         confirmLabel="Delete product"
         cancelLabel="Keep it"
@@ -117,4 +108,4 @@ const EditProductPage = () => {
   )
 }
 
-export default EditProductPage
+export default ProductDetailPage

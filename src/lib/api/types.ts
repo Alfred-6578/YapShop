@@ -80,6 +80,16 @@ export interface MediaResponse {
   type: string;
 }
 
+export interface CategoryResponse {
+  id: string;
+  name: string;
+  description?: string | null;
+  parent_id?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
  * Raw products shape. `price` is a stringified decimal (same as orders).
  * Several fields are nullable — the wire may send `null` rather than omitting
@@ -96,16 +106,26 @@ export interface RawProductResponse {
   price: string;
   sku?: string | null;
   category_id?: string | null;
-  tags: string[];
+  /** Wire occasionally sends null instead of an empty array. Normalized to
+   *  string[] in ProductResponse. */
+  tags: string[] | null;
   is_active: boolean;
+  /** Whether customers can place orders for this product. The spec's response
+   *  example elides this field but the request body sets it, so it almost
+   *  certainly comes back on responses too. Typed optional to be safe. */
+  is_live?: boolean;
   tracking_id?: string | null;
-  media: MediaResponse[];
+  /** Wire occasionally sends null instead of an empty array. Normalized to
+   *  MediaResponse[] in ProductResponse. */
+  media: MediaResponse[] | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface ProductResponse extends Omit<RawProductResponse, "price"> {
+export interface ProductResponse extends Omit<RawProductResponse, "price" | "tags" | "media"> {
   price: number;
+  tags: string[];
+  media: MediaResponse[];
 }
 
 // ---------- customers ----------
