@@ -30,6 +30,50 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Extract a human-readable message from a server error payload. Handles:
+ *  - FastAPI string detail        → `{detail: "..."}`
+ *  - FastAPI validation list      → `{detail: [{loc, msg, ...}, ...]}`
+ *  - Generic `{message}` / `{error}` shapes
+ *  - Plain text bodies (tracebacks, html, etc.)
+ * Falls back to `Request failed: <status> <path>` when nothing usable is found.
+ */
+function describeApiError(status: number, payload: unknown, path: string): string {
+  if (payload && typeof payload === "object") {
+    const p = payload as Record<string, unknown>;
+
+    if (typeof p.detail === "string" && p.detail.trim()) return p.detail.trim();
+
+    if (Array.isArray(p.detail)) {
+      const issues = p.detail.flatMap((d): string[] => {
+        if (d && typeof d === "object") {
+          const dd = d as Record<string, unknown>;
+          const msg = typeof dd.msg === "string" ? dd.msg : "invalid";
+          const loc = Array.isArray(dd.loc)
+            ? dd.loc.filter((x) => x !== "body").join(".")
+            : "";
+          return [loc ? `${loc}: ${msg}` : msg];
+        }
+        return [];
+      });
+      if (issues.length) return issues.join("; ");
+    }
+
+    if (typeof p.message === "string" && p.message.trim()) return p.message.trim();
+    if (typeof p.error === "string" && p.error.trim()) return p.error.trim();
+  }
+
+  if (typeof payload === "string") {
+    const trimmed = payload.trim();
+    if (trimmed) {
+      // Keep it short — tracebacks can be huge.
+      return trimmed.length > 240 ? `${trimmed.slice(0, 240)}…` : trimmed;
+    }
+  }
+
+  return `Request failed: ${status} ${path}`;
+}
+
 // Single in-flight refresh promise so parallel 401s share one refresh call.
 let refreshInflight: Promise<string | null> | null = null;
 
@@ -64,16 +108,14 @@ async function refreshAccessToken(): Promise<string | null> {
 }
 
 export interface ApiOptions extends Omit<RequestInit, "body"> {
-  /** Plain object — JSON-stringified for you. Use `formData` for multipart. */
+  /** Plain object → JSON-stringified. FormData → sent as-is for multipart uploads. */
   body?: unknown;
-  /** Use this for file uploads. Sent as-is; no Content-Type is set. */
-  formData?: FormData;
   /** Skip auth header injection (e.g. for the login endpoint). */
   skipAuth?: boolean;
 }
 
 export async function api<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { body, formData, skipAuth, headers, ...rest } = options;
+  const { body, skipAuth, headers, ...rest } = options;
 
   const send = async (token: string | null): Promise<Response> => {
     const h = new Headers(headers);
@@ -81,9 +123,12 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     h.set("ngrok-skip-browser-warning", "true");
     if (!skipAuth && token) h.set("Authorization", `Bearer ${token}`);
 
+    const isFormData = body instanceof FormData;
     let payload: BodyInit | undefined;
-    if (formData) {
-      payload = formData; // browser sets multipart boundary; do not set Content-Type
+    if (isFormData) {
+      // Don't set Content-Type — the browser writes
+      // `multipart/form-data; boundary=...` with the boundary token it generated.
+      payload = body;
     } else if (body !== undefined) {
       if (!h.has("Content-Type")) h.set("Content-Type", "application/json");
       payload = JSON.stringify(body);
@@ -111,12 +156,23 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
 
   if (!res.ok) {
     let payload: unknown = null;
+    // Clone so we can try JSON first, then fall back to raw text. Without the
+    // clone the second .text() would error with "body already consumed".
     try {
-      payload = await res.json();
+      payload = await res.clone().json();
     } catch {
-      /* response body was not JSON; that's fine */
+      try {
+        payload = await res.text();
+      } catch {
+        /* body wasn't readable at all; leave payload null */
+      }
     }
-    throw new ApiError(res.status, payload, `Request failed: ${res.status}`);
+    const message = describeApiError(res.status, payload, path);
+    // Mirror the parsed payload into the console — DevTools can show structure
+    // the UI banner doesn't have room for.
+    // eslint-disable-next-line no-console
+    console.error(`[api] ${res.status} ${path}`, payload);
+    throw new ApiError(res.status, payload, message);
   }
 
   if (res.status === 204) return undefined as T;

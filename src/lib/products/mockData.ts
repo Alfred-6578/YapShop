@@ -16,6 +16,9 @@ export interface Product {
   category?: string
   is_live: boolean
   photos: ProductPhoto[]
+  /** Aligns with API ProductResponse.media. Mock entries leave this undefined;
+   *  getProductImageUrl falls back to color + initials. */
+  media?: Array<{ url: string; type: string }>
 }
 
 export const MOCK_PRODUCTS: Product[] = [

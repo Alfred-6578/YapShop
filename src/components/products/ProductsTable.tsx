@@ -1,17 +1,16 @@
 "use client"
 import React from 'react'
 import Link from 'next/link'
-import { HiPencilSquare } from 'react-icons/hi2'
+import { HiChevronRight } from 'react-icons/hi2'
 
 import Card from '@/components/ui/Card'
 import StatusBadge from '@/components/ui/StatusBadge'
 import Thumbnail from '@/components/ui/Thumbnail'
-import type { Product } from '@/lib/products/mockData'
-
-export type { Product }
+import type { ProductResponse } from '@/lib/api/types'
+import { getProductColor, getProductImageUrl, getProductInitials } from '@/lib/products/visuals'
 
 type Props = {
-  products: Product[]
+  products: ProductResponse[]
   emptyState?: React.ReactNode
 }
 
@@ -34,17 +33,23 @@ const ProductsTable = ({ products, emptyState }: Props) => {
         emptyState ?? null
       ) : (
         products.map((p, i) => (
-          <div
+          <Link
             key={p.id}
+            href={`/products/${p.id}`}
             className={`grid ${GRID} items-center py-3 hover:bg-white/2 ${
               i === 0 ? '' : 'border-t border-white/4'
             }`}
           >
-            <Thumbnail initials={p.initials} color={p.thumbnail_color} />
+            <Thumbnail
+              src={getProductImageUrl(p) ?? undefined}
+              initials={getProductInitials(p)}
+              color={getProductColor(p)}
+              size={36}
+            />
 
             <div className="min-w-0">
               <div className="text-[12.5px] text-fg truncate">{p.name}</div>
-              <div className="font-mono text-[10.5px] text-fg-subtle truncate">{p.sku}</div>
+              <div className="font-mono text-[10.5px] text-fg-subtle truncate">{p.sku ?? ''}</div>
             </div>
 
             <div className="hidden vsm:flex items-center gap-1 min-w-0">
@@ -70,14 +75,8 @@ const ProductsTable = ({ products, emptyState }: Props) => {
               <StatusBadge status={p.is_active ? 'active' : 'inactive'} />
             </div>
 
-            <Link
-              href={`/products/${p.id}/edit`}
-              aria-label={`Edit ${p.name}`}
-              className="text-fg-subtle hover:text-fg cursor-pointer inline-flex items-center justify-center"
-            >
-              <HiPencilSquare size={14} />
-            </Link>
-          </div>
+            <HiChevronRight size={14} className="text-fg-subtle justify-self-center" />
+          </Link>
         ))
       )}
     </Card>
