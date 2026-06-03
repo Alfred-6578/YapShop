@@ -1,21 +1,32 @@
-'use client';
+"use client"
+import Link from "next/link"
+import { HiEllipsisHorizontal, HiOutlinePencilSquare } from "react-icons/hi2"
+import { FaWhatsapp } from "react-icons/fa6"
 
-import Link from 'next/link';
-import { HiEllipsisHorizontal, HiOutlinePencilSquare } from 'react-icons/hi2';
-import { FaWhatsapp } from 'react-icons/fa6';
-import Button from '@/components/ui/Button';
-import { type Customer, getDisplayName } from '@/lib/customers/mockData';
+import { getDisplayName } from "@/lib/customers/utils"
+import type { CustomerResponse } from "@/lib/api/types"
 
-type Props = { customer: Customer };
+type Props = { customer: CustomerResponse }
 
-const whatsappUrl = (number: string) => `https://wa.me/${number.replace(/[+\s-]/g, '')}`;
+const whatsappUrl = (number: string) =>
+  `https://wa.me/${number.replace(/[+\s-]/g, "")}`
 
 const CustomerActionBar = ({ customer }: Props) => {
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-      <span className="text-[12px] text-fg-muted flex-1 min-w-0 truncate">
-        Customers / <b className="text-fg font-medium">{getDisplayName(customer)}</b>
-      </span>
+      <nav
+        aria-label="Breadcrumb"
+        className="text-[12px] flex-1 min-w-0 truncate"
+      >
+        <Link
+          href="/customers"
+          className="text-fg-muted hover:text-fg transition-colors"
+        >
+          Customers
+        </Link>
+        <span className="text-fg-subtle mx-1.5">/</span>
+        <span className="text-fg font-medium">{getDisplayName(customer)}</span>
+      </nav>
 
       <button
         type="button"
@@ -46,7 +57,7 @@ const CustomerActionBar = ({ customer }: Props) => {
         <span className="hidden vsm:inline md:hidden">Message</span>
       </a>
     </div>
-  );
-};
+  )
+}
 
-export default CustomerActionBar;
+export default CustomerActionBar

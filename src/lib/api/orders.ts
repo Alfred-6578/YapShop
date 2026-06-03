@@ -35,18 +35,44 @@ export async function listOrders(): Promise<OrderResponse[]> {
   return raw.map(normalizeOrder);
 }
 
+/** Server-side filter to a single customer — preferred over listing all
+ *  orders and filtering client-side once order volume grows. */
+export async function listOrdersByCustomer(
+  customerId: string,
+): Promise<OrderResponse[]> {
+  const raw = await api<RawOrderResponse[]>(`/orders/customer/${customerId}`);
+  return raw.map(normalizeOrder);
+}
+
 export async function getOrder(id: string): Promise<OrderResponse> {
   const raw = await api<RawOrderResponse>(`/orders/${id}`);
   return normalizeOrder(raw);
 }
 
+/**
+ * Move the order along its forward lifecycle. Use cancelOrder for cancellation
+ * — the Exclude here prevents accidentally passing 'cancelled' through this
+ * endpoint, which would 422 (the server reserves cancellation for the
+ * dedicated endpoint that may trigger refunds / inventory restock).
+ */
 export async function updateOrderStatus(
   id: string,
-  status: OrderStatus,
+  status: Exclude<OrderStatus, "cancelled">,
 ): Promise<OrderResponse> {
   const raw = await api<RawOrderResponse>(`/orders/${id}/status`, {
     method: "PATCH",
     body: { status },
+  });
+  return normalizeOrder(raw);
+}
+
+/**
+ * Cancel the order. Separate endpoint because cancellation may trigger
+ * backend side effects (refunds, inventory restock, customer notification).
+ */
+export async function cancelOrder(id: string): Promise<OrderResponse> {
+  const raw = await api<RawOrderResponse>(`/orders/${id}/cancel`, {
+    method: "PATCH",
   });
   return normalizeOrder(raw);
 }

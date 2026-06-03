@@ -137,13 +137,31 @@ export interface AddressResponse {
   line?: string;
   is_default: boolean;
 }
+/**
+ * Note: only `whatsapp_number`, `id`, `created_at`, `updated_at` are required
+ * by the spec. `name` can be null on freshly-created records (the customer is
+ * auto-created from a WhatsApp message before any profile is filled in).
+ * Addresses are a separate resource (CustomerAddressResponse) — fetch them
+ * via the dedicated endpoint when needed.
+ */
 export interface CustomerResponse {
   id: string;
-  name: string;
+  name?: string | null;
   whatsapp_number: string;
-  addresses: AddressResponse[];
+  email?: string | null;
+  display_name?: string | null;
+  extra_metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Body shape for POST /customers/ and PUT /customers/{id}. */
+export interface CustomerWritePayload {
+  name?: string | null;
+  whatsapp_number: string;
+  display_name?: string | null;
+  email?: string | null;
+  extra_metadata?: Record<string, unknown> | null;
 }
 
 // ---------- orders ----------

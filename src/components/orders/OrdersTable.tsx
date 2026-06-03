@@ -6,17 +6,19 @@ import { HiChevronRight } from 'react-icons/hi2'
 import Card from '@/components/ui/Card'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { formatRelative } from '@/lib/utils/format'
-import type { Order } from '@/lib/orders/mockData'
+import type { OrderResponse } from '@/lib/api/types'
 
 type Props = {
-  orders: Order[]
+  orders: OrderResponse[]
   emptyState?: React.ReactNode
 }
 
 const GRID =
   'grid-cols-[minmax(0,1fr)_72px_72px_20px] gap-2 px-3 ' +
   'xsm:grid-cols-[80px_minmax(0,1fr)_72px_72px_20px] ' +
-  'vsm:grid-cols-[88px_minmax(0,1fr)_64px_80px_78px_20px] vsm:gap-3 vsm:px-3.5'
+  'tny:grid-cols-[128px_minmax(0,1fr)_72px_72px_20px] ' +
+  'vsm:grid-cols-[128px_minmax(0,1fr)_64px_80px_78px_20px] ' +
+  'sm:grid-cols-[188px_minmax(0,1fr)_64px_80px_78px_20px] vsm:gap-3 vsm:px-3.5'
 
 const OrdersTable = ({ orders, emptyState }: Props) => {
   return (

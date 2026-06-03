@@ -336,7 +336,7 @@ export const MOCK_CUSTOMERS: Customer[] = [
 
 /** Match orders to a customer by whatsapp_number. */
 export function getOrdersForCustomer(customer: Customer): Order[] {
-  return MOCK_ORDERS.filter((o) => o.customer_whatsapp === customer.whatsapp_number)
+  return MOCK_ORDERS.filter((o) => o.customer_whatsapp_number === customer.whatsapp_number)
 }
 
 export function getLifetimeValue(customer: Customer): number {
