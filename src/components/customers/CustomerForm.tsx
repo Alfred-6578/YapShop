@@ -1,44 +1,68 @@
-'use client'
+"use client"
+import Link from "next/link"
+import { useState } from "react"
+import {
+  HiOutlineExclamationTriangle,
+  HiOutlineTrash,
+} from "react-icons/hi2"
 
-import { useState } from 'react'
-import Card from '@/components/ui/Card'
-import CardHeader from '@/components/ui/CardHeader'
-import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
-import Textarea from '@/components/ui/Textarea'
-import Field from '@/components/ui/Field'
-import TagsInput from '@/components/ui/TagsInput'
-import { HiOutlineTrash } from 'react-icons/hi2'
-import { getDisplayName, type Customer } from '@/lib/customers/mockData'
+import Card from "@/components/ui/Card"
+import CardHeader from "@/components/ui/CardHeader"
+import Button from "@/components/ui/Button"
+import Input from "@/components/ui/Input"
+import Textarea from "@/components/ui/Textarea"
+import Field from "@/components/ui/Field"
+import TagsInput from "@/components/ui/TagsInput"
+import { getDisplayName } from "@/lib/customers/utils"
+import type { CustomerResponse } from "@/lib/api/types"
 
-type Props = {
-  customer: Customer
-  onSubmit: (values: {
-    name: string
-    display_name?: string
-    whatsapp_number: string
-    email?: string | null
-    notes: string
-    tags: string[]
-  }) => void
-  onCancel: () => void
-  onDelete: () => void
+export type CustomerFormValues = {
+  name: string
+  display_name?: string
+  whatsapp_number: string
+  email?: string | null
+  notes: string
+  tags: string[]
 }
 
-const CustomerForm = ({ customer, onSubmit, onCancel, onDelete }: Props) => {
-  const initialNotes = typeof customer.extra_metadata?.notes === 'string' ? (customer.extra_metadata.notes as string) : ''
-  const initialTags = Array.isArray(customer.extra_metadata?.tags) ? (customer.extra_metadata.tags as unknown[]).filter((t): t is string => typeof t === 'string') : []
+type Props = {
+  customer: CustomerResponse
+  onSubmit: (values: CustomerFormValues) => void
+  onCancel: () => void
+  onDelete: () => void
+  isSubmitting?: boolean
+  submitError?: unknown
+}
 
-  const [name, setName] = useState(customer.name)
-  const [displayName, setDisplayName] = useState(customer.display_name ?? '')
+const CustomerForm = ({
+  customer,
+  onSubmit,
+  onCancel,
+  onDelete,
+  isSubmitting = false,
+  submitError,
+}: Props) => {
+  const md = customer.extra_metadata ?? {}
+  const initialNotes = typeof md.notes === "string" ? md.notes : ""
+  const initialTags = Array.isArray(md.tags)
+    ? (md.tags as unknown[]).filter((t): t is string => typeof t === "string")
+    : []
+
+  const [name, setName] = useState(customer.name ?? "")
+  const [displayName, setDisplayName] = useState(customer.display_name ?? "")
   const [whatsapp, setWhatsapp] = useState(customer.whatsapp_number)
-  const [email, setEmail] = useState(customer.email ?? '')
+  const [email, setEmail] = useState(customer.email ?? "")
   const [notes, setNotes] = useState(initialNotes)
   const [tags, setTags] = useState<string[]>(initialTags)
-  const [errors, setErrors] = useState<{ name?: boolean; whatsapp?: boolean }>({})
+  const [errors, setErrors] = useState<{ name?: boolean; whatsapp?: boolean }>(
+    {},
+  )
 
   const handleSubmit = () => {
-    const next = { name: !name.trim(), whatsapp: !whatsapp.trim() } as { name?: boolean; whatsapp?: boolean }
+    const next = {
+      name: !name.trim(),
+      whatsapp: !whatsapp.trim(),
+    } as { name?: boolean; whatsapp?: boolean }
     setErrors(next)
     if (next.name || next.whatsapp) return
     onSubmit({
@@ -51,32 +75,83 @@ const CustomerForm = ({ customer, onSubmit, onCancel, onDelete }: Props) => {
     })
   }
 
+  const errorMessage =
+    submitError instanceof Error
+      ? submitError.message
+      : submitError
+        ? "Couldn't save changes."
+        : null
+
   return (
     <>
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-        <span className="text-[12px] text-fg-muted flex-1 truncate">
-          Customers / <b className="text-fg font-medium">{getDisplayName(customer)}</b> / Edit
-        </span>
-        <Button onClick={onCancel}>Cancel</Button>
-        <Button variant="primary" onClick={handleSubmit}>Save changes</Button>
+        <nav
+          aria-label="Breadcrumb"
+          className="text-[12px] flex-1 min-w-0 truncate"
+        >
+          <Link
+            href="/customers"
+            className="text-fg-muted hover:text-fg transition-colors"
+          >
+            Customers
+          </Link>
+          <span className="text-fg-subtle mx-1.5">/</span>
+          <Link
+            href={`/customers/${customer.id}`}
+            className="text-fg-muted hover:text-fg transition-colors"
+          >
+            {getDisplayName(customer)}
+          </Link>
+          <span className="text-fg-subtle mx-1.5">/</span>
+          <span className="text-fg font-medium">Edit</span>
+        </nav>
+        <Button onClick={onCancel} disabled={isSubmitting}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? "Saving…" : "Save changes"}
+        </Button>
       </div>
 
       <div className="flex flex-col gap-3 p-4 max-w-[640px] mx-auto">
+        {errorMessage && (
+          <div className="flex items-start gap-2 bg-[rgba(226,75,74,0.08)] border border-[rgba(226,75,74,0.25)] rounded-[8px] px-3 py-2 text-[11.5px] text-[#F09595]">
+            <HiOutlineExclamationTriangle size={14} className="shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
         <Card>
           <CardHeader title="Profile" />
           <div className="mt-3 flex flex-col gap-2.5">
             <Field label="Display name">
-              <Input value={displayName} onChange={setDisplayName} placeholder="Emperor" />
+              <Input
+                value={displayName}
+                onChange={setDisplayName}
+                placeholder="Emperor"
+              />
             </Field>
             <Field label="Full name" required error={errors.name}>
               <Input value={name} onChange={setName} placeholder="Emperor Eze" />
             </Field>
             <div className="grid grid-cols-2 gap-2.5">
               <Field label="WhatsApp number" required error={errors.whatsapp}>
-                <Input value={whatsapp} onChange={setWhatsapp} placeholder="+234 ..." />
+                <Input
+                  value={whatsapp}
+                  onChange={setWhatsapp}
+                  placeholder="+234 ..."
+                />
               </Field>
               <Field label="Email">
-                <Input value={email} onChange={setEmail} placeholder="Not provided" />
+                <Input
+                  value={email}
+                  onChange={setEmail}
+                  placeholder="Not provided"
+                />
               </Field>
             </div>
           </div>
@@ -86,7 +161,12 @@ const CustomerForm = ({ customer, onSubmit, onCancel, onDelete }: Props) => {
           <CardHeader title="Notes & metadata" />
           <div className="mt-3 flex flex-col gap-2.5">
             <Field label="Notes">
-              <Textarea value={notes} onChange={setNotes} rows={4} placeholder="Add context, preferences, anything useful for your team…" />
+              <Textarea
+                value={notes}
+                onChange={setNotes}
+                rows={4}
+                placeholder="Add context, preferences, anything useful for your team…"
+              />
             </Field>
             <Field label="Tags">
               <TagsInput value={tags} onChange={setTags} placeholder="Add tag…" />
@@ -99,14 +179,23 @@ const CustomerForm = ({ customer, onSubmit, onCancel, onDelete }: Props) => {
         <button
           type="button"
           onClick={onDelete}
-          className="text-[#F09595] text-[12.5px] inline-flex items-center gap-1.5 cursor-pointer hover:text-[#F0B5B5]"
+          disabled={isSubmitting}
+          className="text-[#F09595] text-[12.5px] inline-flex items-center gap-1.5 cursor-pointer hover:text-[#F0B5B5] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <HiOutlineTrash size={13} />
           Delete customer
         </button>
         <div className="flex items-center gap-2">
-          <Button onClick={onCancel}>Cancel</Button>
-          <Button variant="primary" onClick={handleSubmit}>Save changes</Button>
+          <Button onClick={onCancel} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "Saving…" : "Save changes"}
+          </Button>
         </div>
       </div>
     </>

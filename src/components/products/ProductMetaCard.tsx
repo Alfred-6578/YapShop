@@ -1,3 +1,7 @@
+"use client"
+import { useState } from "react"
+import { HiCheck, HiOutlineClipboard } from "react-icons/hi2"
+
 import Card from "@/components/ui/Card"
 import CardHeader from "@/components/ui/CardHeader"
 import { formatRelative } from "@/lib/utils/format"
@@ -17,14 +21,9 @@ const ProductMetaCard = ({ product }: Props) => {
     <Card>
       <CardHeader title="Meta" />
       <div className="mt-3">
-        <Row label="ID">
-          <span className="font-mono text-[10.5px] text-[#C5CAD0]">{shortId(product.id)}</span>
-        </Row>
         <Row label="Tracking ID">
           {product.tracking_id ? (
-            <span className="font-mono text-[10.5px] text-[#C5CAD0]">
-              {shortId(product.tracking_id)}
-            </span>
+            <CopyableId value={product.tracking_id} />
           ) : (
             <span className="text-[11px] text-fg-subtle">—</span>
           )}
@@ -46,5 +45,37 @@ const Row = ({ label, children }: { label: string; children: React.ReactNode }) 
     {children}
   </div>
 )
+
+const CopyableId = ({ value }: { value: string }) => {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API can throw on insecure origins or denied permission —
+      // surface nothing rather than crashing; user can still select the text.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={copied ? "Copied" : "Copy tracking ID"}
+      title={value}
+      className="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-[#C5CAD0] hover:text-fg cursor-pointer group"
+    >
+      <span>{shortId(value)}</span>
+      {copied ? (
+        <HiCheck size={12} className="text-[#6FD9A0]" />
+      ) : (
+        <HiOutlineClipboard size={12} className="text-fg-subtle group-hover:text-fg" />
+      )}
+    </button>
+  )
+}
 
 export default ProductMetaCard

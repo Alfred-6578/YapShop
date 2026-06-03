@@ -13,9 +13,19 @@ type Props = {
 const ProductActionBar = ({ product, onDelete, isDeleting = false }: Props) => {
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-      <span className="text-[12px] text-fg-muted flex-1 min-w-0 truncate">
-        Products / <b className="text-fg font-medium">{product.name}</b>
-      </span>
+      <nav
+        aria-label="Breadcrumb"
+        className="text-[12px] flex-1 min-w-0 truncate"
+      >
+        <Link
+          href="/products"
+          className="text-fg-muted hover:text-fg transition-colors"
+        >
+          Products
+        </Link>
+        <span className="text-fg-subtle mx-1.5">/</span>
+        <span className="text-fg font-medium">{product.name}</span>
+      </nav>
 
       <button
         type="button"
