@@ -3,7 +3,6 @@ import React from 'react'
 import { usePathname } from 'next/navigation'
 import { HiOutlineBell } from 'react-icons/hi2'
 
-import Breadcrumb from './Breadcrumb'
 import SearchTrigger from './SearchTrigger'
 import BrandMark from './BrandMark'
 import ThemeToggle from '@/components/ui/ThemeToggle'
@@ -40,15 +39,6 @@ const TopBar = () => {
   const segments = pathname.split('/').filter(Boolean)
   const titleSegment = resolveTitleSegment(segments)
   const title = titleSegment ? cap(titleSegment) : 'Home'
-  const crumbs =
-    segments.length === 0
-      ? [{ label: 'Home' }]
-      : segments.length === 1
-      ? [{ label: cap(segments[0]) }, { label: 'Overview' }]
-      : segments.map((s, i) => ({
-          label: cap(s),
-          href: '/' + segments.slice(0, i + 1).join('/'),
-        }))
 
   return (
     <header className="sticky top-0 z-20 h-14 px-4 flex items-center gap-3 bg-panel border-b border-border">
@@ -60,12 +50,11 @@ const TopBar = () => {
         </div>
       </div>
 
-      <div className="hidden md:block flex-1 min-w-0">
-        <Breadcrumb items={crumbs} />
-      </div>
       <div className="hidden md:block flex-1 max-w-md">
         <SearchTrigger />
       </div>
+
+      <div className="hidden md:block flex-1" />
 
       <div className="flex items-center gap-2">
         <div className="hidden md:block">

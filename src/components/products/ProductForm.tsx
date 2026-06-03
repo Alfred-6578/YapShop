@@ -1,5 +1,6 @@
 "use client"
 import React, { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
 import {
   HiEllipsisHorizontal,
@@ -293,9 +294,32 @@ const ProductForm = ({
 
       {/* Action bar */}
       <div className="relative flex items-center gap-2.5 px-4 py-2.5 border-b border-border">
-        <span className="text-[12px] text-fg-muted flex-1 truncate">
-          Products / <b className="text-fg font-medium">{breadcrumbName}</b>
-        </span>
+        <nav
+          aria-label="Breadcrumb"
+          className="text-[12px] flex-1 min-w-0 truncate"
+        >
+          <Link
+            href="/products"
+            className="text-fg-muted hover:text-fg transition-colors"
+          >
+            Products
+          </Link>
+          <span className="text-fg-subtle mx-1.5">/</span>
+          {mode === 'edit' && initialValues ? (
+            <>
+              <Link
+                href={`/products/${initialValues.id}`}
+                className="text-fg-muted hover:text-fg transition-colors"
+              >
+                {state.name || 'Untitled'}
+              </Link>
+              <span className="text-fg-subtle mx-1.5">/</span>
+              <span className="text-fg font-medium">Edit</span>
+            </>
+          ) : (
+            <span className="text-fg font-medium">{breadcrumbName}</span>
+          )}
+        </nav>
         {mode === 'edit' && (
           <button
             type="button"
