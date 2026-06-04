@@ -1,5 +1,4 @@
 "use client"
-import React from 'react'
 import { usePathname } from 'next/navigation'
 import { HiOutlineBell } from 'react-icons/hi2'
 
@@ -8,6 +7,7 @@ import BrandMark from './BrandMark'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import IconButton from '@/components/ui/IconButton'
 import Avatar from '@/components/ui/Avatar'
+import ConnectionStatus from '@/components/ui/ConnectionStatus'
 
 const segmentLabels: Record<string, string> = {
   dashboard: 'Overview',
@@ -57,6 +57,9 @@ const TopBar = () => {
       <div className="hidden md:block flex-1" />
 
       <div className="flex items-center gap-2">
+        <div className="hidden md:flex">
+          <ConnectionStatus />
+        </div>
         <div className="hidden md:block">
           <ThemeToggle />
         </div>

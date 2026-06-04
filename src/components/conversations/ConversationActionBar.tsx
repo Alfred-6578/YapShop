@@ -1,28 +1,33 @@
 "use client"
-import React from 'react'
-import { HiEllipsisHorizontal } from 'react-icons/hi2'
-import { LiaHeadsetSolid } from 'react-icons/lia'
+import Link from "next/link"
+import { HiEllipsisHorizontal } from "react-icons/hi2"
 
-import Button from '@/components/ui/Button'
-import type { Conversation } from '@/lib/conversations/mockData'
+import { getDisplayName } from "@/lib/customers/utils"
+import type { ConversationResponse, CustomerResponse } from "@/lib/api/types"
 
 type Props = {
-  conversation: Conversation
-  onTakeOver: () => void
-  onResumeAi: () => void
+  conversation: ConversationResponse
+  customer: CustomerResponse | null
 }
 
-const ConversationActionBar = ({ conversation, onTakeOver, onResumeAi }: Props) => {
-  const isEnded = conversation.status === 'ended'
-  const isStaffActive = conversation.handoff_status === 'active'
-  const isRequested = conversation.handoff_status === 'requested'
+const ConversationActionBar = ({ customer }: Props) => {
+  const label = customer ? getDisplayName(customer) : "…"
 
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
-      <span className="text-[12px] text-fg-muted flex-1 truncate">
-        Conversations /{' '}
-        <b className="text-fg font-medium">{conversation.customer_name}</b>
-      </span>
+      <nav
+        aria-label="Breadcrumb"
+        className="text-[12px] flex-1 min-w-0 truncate"
+      >
+        <Link
+          href="/conversations"
+          className="text-fg-muted hover:text-fg transition-colors"
+        >
+          Conversations
+        </Link>
+        <span className="text-fg-subtle mx-1.5">/</span>
+        <span className="text-fg font-medium">{label}</span>
+      </nav>
 
       <button
         type="button"
@@ -31,25 +36,6 @@ const ConversationActionBar = ({ conversation, onTakeOver, onResumeAi }: Props) 
       >
         <HiEllipsisHorizontal size={16} />
       </button>
-
-      {!isEnded && isStaffActive && (
-        <Button onClick={onResumeAi}>Resume AI</Button>
-      )}
-
-      {!isEnded && isRequested && (
-        <Button variant="primary" icon={<LiaHeadsetSolid size={14} />} onClick={onTakeOver}>
-          Take over
-        </Button>
-      )}
-
-      {!isEnded && !isRequested && (
-        <Button
-          variant={isStaffActive ? 'primary' : 'ghost'}
-          onClick={onTakeOver}
-        >
-          Take over
-        </Button>
-      )}
     </div>
   )
 }

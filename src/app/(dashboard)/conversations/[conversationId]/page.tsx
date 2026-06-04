@@ -1,93 +1,255 @@
 "use client"
-import React, { useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from "next/navigation"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { HiOutlineArrowPath, HiOutlineExclamationTriangle } from "react-icons/hi2"
 
-import AttentionBanner from '@/components/conversations/AttentionBanner'
-import ConversationActionBar from '@/components/conversations/ConversationActionBar'
-import ConversationCustomerCard from '@/components/conversations/ConversationCustomerCard'
-import ConversationHandoffCard from '@/components/conversations/ConversationHandoffCard'
-import ConversationMetaCard from '@/components/conversations/ConversationMetaCard'
-import MessageThread from '@/components/conversations/MessageThread'
-import ReplyInput from '@/components/conversations/ReplyInput'
-import { formatRelative } from '@/lib/utils/format'
-import { MOCK_CONVERSATIONS } from '@/lib/conversations/mockData'
+import ConversationActionBar from "@/components/conversations/ConversationActionBar"
+import ConversationHeader from "@/components/conversations/ConversationHeader"
+import ConversationHandoffCard from "@/components/conversations/ConversationHandoffCard"
+import ConversationMessagesList from "@/components/conversations/ConversationMessagesList"
+import ReplyInput from "@/components/conversations/ReplyInput"
+import {
+  assignHandoffToStaff,
+  getConversation,
+  resumeAi,
+  startHandoff,
+} from "@/lib/api/conversations"
+import { getCustomer } from "@/lib/api/customers"
+import { getMessagesForConversation, sendMessage } from "@/lib/api/messages"
+import { getCurrentStaff, listStaff } from "@/lib/api/staff"
+import type { MessageResponse } from "@/lib/api/types"
 
 const ConversationDetailPage = () => {
+  const router = useRouter()
+  const queryClient = useQueryClient()
   const { conversationId } = useParams<{ conversationId: string }>()
-  const conversation = MOCK_CONVERSATIONS.find((c) => c.id === conversationId)
 
-  const [draft, setDraft] = useState('')
-  const [bannerDismissed, setBannerDismissed] = useState(false)
+  const conversationQuery = useQuery({
+    queryKey: ["conversations", "detail", conversationId],
+    queryFn: () => getConversation(conversationId),
+    staleTime: 15_000,
+    enabled: !!conversationId,
+  })
 
-  if (!conversation) {
-    return <div className="p-4 text-fg-muted text-[12px]">Conversation not found.</div>
+  // Dependent query — only fires once we know the customer_id from the
+  // conversation. The non-null assertion is safe because `enabled` gates it.
+  const customerQuery = useQuery({
+    queryKey: ["customers", "detail", conversationQuery.data?.customer_id],
+    queryFn: () => getCustomer(conversationQuery.data!.customer_id),
+    staleTime: 60_000,
+    enabled: !!conversationQuery.data?.customer_id,
+  })
+
+  const staffQuery = useQuery({
+    queryKey: ["staff", "list"],
+    queryFn: listStaff,
+    staleTime: 5 * 60_000,
+  })
+
+  // Short staleTime — chat is the most time-sensitive surface in the app, so
+  // navigating back to a conversation refetches almost immediately. Step 6
+  // layers polling on top of this.
+  const messagesQuery = useQuery({
+    queryKey: ["messages", "conversation", conversationId],
+    queryFn: () => getMessagesForConversation(conversationId),
+    staleTime: 5_000,
+    enabled: !!conversationId,
+  })
+
+  // Current user — long staleTime since the logged-in operator rarely
+  // changes within a session.
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
+  })
+
+  const sendMutation = useMutation({
+    mutationFn: (content: string) =>
+      sendMessage({
+        conversation_id: conversationId,
+        sender_type: "staff",
+        staff_id: meQuery.data!.id,
+        direction: "outbound",
+        message_type: "text",
+        content,
+        status: "sent",
+      }),
+    // Optimistic update — paint the message into the thread before the
+    // server confirms. The temp id is replaced on `onSettled` invalidation.
+    onMutate: async (content) => {
+      const queryKey = ["messages", "conversation", conversationId]
+      await queryClient.cancelQueries({ queryKey })
+      const previous = queryClient.getQueryData<MessageResponse[]>(queryKey)
+
+      const now = new Date().toISOString()
+      const tempMessage: MessageResponse = {
+        id: `temp-${Date.now()}`,
+        conversation_id: conversationId,
+        sender_type: "staff",
+        staff_id: meQuery.data!.id,
+        direction: "outbound",
+        message_type: "text",
+        content,
+        media_urls: [],
+        status: "sent",
+        whatsapp_message_id: null,
+        created_at: now,
+        updated_at: now,
+      }
+
+      queryClient.setQueryData<MessageResponse[]>(queryKey, (old = []) => [
+        ...old,
+        tempMessage,
+      ])
+
+      return { previous }
+    },
+    onError: (_err, _content, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(
+          ["messages", "conversation", conversationId],
+          context.previous,
+        )
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["messages", "conversation", conversationId],
+      })
+    },
+  })
+
+  const takeOverMutation = useMutation({
+    mutationFn: async () => {
+      // If no handoff exists yet, start one first; then (re)assign to me.
+      const current = conversationQuery.data
+      if (current && (current.handoff_status ?? "none") === "none") {
+        await startHandoff(conversationId, { reason: "Staff intervention" })
+      }
+      return assignHandoffToStaff(conversationId, meQuery.data!.id)
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        ["conversations", "detail", conversationId],
+        updated,
+      )
+      queryClient.invalidateQueries({ queryKey: ["conversations", "filter"] })
+      queryClient.invalidateQueries({ queryKey: ["handoffs"] })
+    },
+  })
+
+  const resolveMutation = useMutation({
+    mutationFn: () => resumeAi(conversationId),
+    onSuccess: (updated) => {
+      queryClient.setQueryData(
+        ["conversations", "detail", conversationId],
+        updated,
+      )
+      queryClient.invalidateQueries({ queryKey: ["conversations", "filter"] })
+      queryClient.invalidateQueries({ queryKey: ["handoffs"] })
+    },
+  })
+
+  if (conversationQuery.isLoading) {
+    return (
+      <div className="p-4">
+        <div className="bg-card border border-border rounded-card px-4 py-12 flex items-center justify-center gap-2 text-[12px] text-fg-muted">
+          <HiOutlineArrowPath size={14} className="animate-spin" />
+          Loading conversation…
+        </div>
+      </div>
+    )
   }
 
-  const isEnded = conversation.status === 'ended'
-  const replyEnabled = !isEnded && conversation.handoff_status === 'active'
-  const showBanner =
-    !bannerDismissed && conversation.handoff_status === 'requested' && !isEnded
+  if (conversationQuery.isError || !conversationQuery.data) {
+    return (
+      <div className="p-8 flex flex-col items-center gap-3 max-w-md mx-auto">
+        <HiOutlineExclamationTriangle size={28} className="text-[#F09595]" />
+        <div className="text-[13px] text-fg text-center">
+          Couldn&apos;t load this conversation.
+        </div>
+        <div className="text-[11.5px] text-fg-subtle text-center">
+          It may have been deleted, or the connection failed.
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/conversations")}
+          className="text-[12px] px-3 py-1.5 rounded-[7px] border border-border text-fg hover:bg-card-hover cursor-pointer"
+        >
+          Back to conversations
+        </button>
+      </div>
+    )
+  }
 
-  const placeholder = isEnded
-    ? 'Conversation ended'
-    : replyEnabled
-      ? 'Type a reply…'
-      : 'Take over to reply…'
+  const conversation = conversationQuery.data
+  const customer = customerQuery.data ?? null
+  const assignedStaff = conversation.assigned_staff_id
+    ? (staffQuery.data?.find((s) => s.id === conversation.assigned_staff_id) ??
+      null)
+    : null
 
-  const escalatedAgo = conversation.handoff_requested_at
-    ? formatRelative(conversation.handoff_requested_at)
-    : ''
+  // Lock rule: only the currently-assigned staff can reply. If handoff isn't
+  // active (AI handling) or someone else is assigned, the input renders as a
+  // lock pill explaining why.
+  const currentStaff = meQuery.data ?? null
+  const isHandoffActive = conversation.handoff_status === "active"
+  const isAssignedToMe =
+    !!currentStaff && currentStaff.id === conversation.assigned_staff_id
+  const canReply = isHandoffActive && isAssignedToMe
+
+  let lockReason: string | undefined
+  if (!canReply) {
+    if (!isHandoffActive) {
+      lockReason = "AI is handling this conversation. Take over to reply."
+    } else if (!isAssignedToMe) {
+      const handlerName = assignedStaff?.name ?? "another staff member"
+      lockReason = `Assigned to ${handlerName}. Take over to reply.`
+    }
+  }
 
   return (
     <>
-      <ConversationActionBar
-        conversation={conversation}
-        onTakeOver={() => console.log('take over', conversation.id)}
-        onResumeAi={() => console.log('resume AI', conversation.id)}
-      />
+      <ConversationActionBar conversation={conversation} customer={customer} />
       <div className="p-4 flex flex-col gap-3">
-        <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr] gap-3 items-start">
-          <div className="flex flex-col gap-2.5 min-w-0">
-            {showBanner && (
-              <AttentionBanner
-                text={`AI escalated this conversation ${escalatedAgo} — customer is waiting`}
-                onDismiss={() => setBannerDismissed(true)}
-              />
-            )}
-            <MessageThread messages={conversation.messages} />
-            <ReplyInput
-              disabled={!replyEnabled}
-              placeholder={placeholder}
-              value={draft}
-              onChange={setDraft}
-              onSend={() => {
-                console.log('send', draft)
-                setDraft('')
-              }}
-            />
-          </div>
-          <div className="flex flex-col gap-2.5 min-w-0">
-            <ConversationCustomerCard
-              customer_id={conversation.customer_id}
-              customer_name={conversation.customer_name}
-              customer_whatsapp={conversation.customer_whatsapp}
-              customer_initials={conversation.customer_initials}
-              customer_color={conversation.customer_color}
-            />
-            <ConversationHandoffCard
-              conversation={conversation}
-              onClaim={() => console.log('claim', conversation.id)}
-              onResume={() => console.log('resume', conversation.id)}
-              onReassign={() => console.log('reassign', conversation.id)}
-            />
-            <ConversationMetaCard
-              started_at={conversation.started_at}
-              conversation_type="AI knowledge base"
-              ai_enabled={conversation.ai_enabled}
-              id={conversation.id}
-            />
-          </div>
-        </div>
+        <ConversationHeader
+          conversation={conversation}
+          customer={customer}
+          isCustomerLoading={customerQuery.isLoading}
+        />
+        <ConversationHandoffCard
+          conversation={conversation}
+          assignedStaff={assignedStaff}
+          currentStaff={currentStaff}
+          onTakeOver={() => takeOverMutation.mutate()}
+          onResolve={() => resolveMutation.mutate()}
+          isTakingOver={takeOverMutation.isPending}
+          isResolving={resolveMutation.isPending}
+          mutationError={takeOverMutation.error ?? resolveMutation.error}
+        />
+        <ConversationMessagesList
+          messages={messagesQuery.data ?? []}
+          isLoading={messagesQuery.isLoading}
+          isError={messagesQuery.isError}
+          onRetry={() => messagesQuery.refetch()}
+          staff={staffQuery.data ?? []}
+          customer={customer}
+        />
+        <ReplyInput
+          locked={!canReply || !currentStaff}
+          lockReason={lockReason}
+          onSend={(content) => sendMutation.mutate(content)}
+          isSending={sendMutation.isPending}
+          sendError={sendMutation.error}
+          onTakeOver={
+            !isAssignedToMe && currentStaff
+              ? () => takeOverMutation.mutate()
+              : undefined
+          }
+          isTakingOver={takeOverMutation.isPending}
+        />
       </div>
     </>
   )

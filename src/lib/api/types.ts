@@ -5,7 +5,14 @@
  */
 
 // ---------- enums ----------
-export type StaffRole = "admin" | "manager" | "support" | "agent";
+/**
+ * Staff role. Audit-confirmed values are owner/admin/support; widened with
+ * `(string & {})` so a future role from the backend doesn't break the type.
+ * The canonical definition (and its mutation-service consumers) lives in
+ * `./staff` — this re-declaration exists so `StaffResponse.role` doesn't
+ * have to take a circular type-import dependency on it.
+ */
+export type StaffRole = "owner" | "admin" | "support" | (string & {});
 
 export type OrderStatus = "pending" | "paid" | "shipped" | "delivered" | "cancelled";
 export type PaymentStatus = "pending" | "completed" | "failed";
@@ -38,9 +45,28 @@ export type HandoffStatus =
   | "resolved";
 export type HandoffTriggerType = "ai" | "customer" | "staff" | "rule";
 
-export type MessageSenderType = "customer" | "ai" | "staff" | "tool";
-export type MessageDirection = "inbound" | "outbound";
-export type MessageStatus = "sent" | "delivered" | "read" | "failed";
+/**
+ * String enums with an escape hatch — known values get autocomplete, unknown
+ * ones still parse so a new sender/status from the backend doesn't break the
+ * type. `(string & {})` is the idiomatic way to widen a literal union without
+ * losing the autocomplete on the known values.
+ */
+export type SenderType = "customer" | "ai" | "staff" | (string & {});
+export type MessageDirection = "inbound" | "outbound" | (string & {});
+export type MessageType =
+  | "text"
+  | "image"
+  | "voice"
+  | "video"
+  | "document"
+  | "system"
+  | (string & {});
+export type MessageStatus =
+  | "sent"
+  | "delivered"
+  | "read"
+  | "failed"
+  | (string & {});
 
 // ---------- pagination ----------
 // API list endpoints return bare arrays. Pagination is via skip/limit query
@@ -53,10 +79,10 @@ export interface PageParams {
 // ---------- staff ----------
 export interface StaffResponse {
   id: string;
-  full_name: string;
-  username: string;
-  email?: string;
-  phone_number?: string;
+  name: string;
+  email: string;
+  phone_number?: string | null;
+  whatsapp_number?: string | null;
   role: StaffRole;
   is_active: boolean;
   created_at: string;
@@ -64,14 +90,14 @@ export interface StaffResponse {
 }
 
 // ---------- auth ----------
+/** Matches the real `TokenResponse` schema from the live OpenAPI doc. */
 export interface AuthTokens {
   access_token: string;
   refresh_token: string;
   token_type: string;
-  expires_in: number;
 }
 export interface LoginResponse extends AuthTokens {
-  user: StaffResponse;
+  staff: StaffResponse;
 }
 
 // ---------- products / inventory ----------
@@ -300,28 +326,61 @@ export interface ConversationResponse {
   started_at: string;
   ended_at?: string | null;
 }
-export interface MessageResponse {
+export interface RawMessageResponse {
   id: string;
   conversation_id: string;
-  sender_type: MessageSenderType;
+  sender_type?: SenderType | null;
+  staff_id?: string | null;
   direction: MessageDirection;
-  message_type: string;
-  content: string;
-  status: MessageStatus;
+  message_type: MessageType;
+  content?: string | null;
+  media_urls?: string[] | null;
+  status?: MessageStatus | null;
+  whatsapp_message_id?: string | null;
   created_at: string;
+  updated_at: string;
 }
 
+// No money/decimal fields to coerce — wire shape is app shape.
+export type MessageResponse = RawMessageResponse;
+
 // ---------- handoffs ----------
+/**
+ * Lightweight nested conversation on handoff list responses. The formal
+ * OpenAPI schema only lists id/status/ai_enabled/handoff_status, but the live
+ * server denormalizes customer name + whatsapp here so the handoff queue can
+ * render a row without a second fetch. Kept optional in case the doc is
+ * eventually right and the customer fields go away.
+ */
+export interface ConversationSummary {
+  id: string;
+  status: ConversationStatus;
+  ai_enabled: boolean;
+  handoff_status?: HandoffStatus | null;
+  customer_name?: string | null;
+  customer_whatsapp_number?: string | null;
+}
+
+export interface StaffSummary {
+  id: string;
+  name: string;
+  email?: string | null;
+  role?: StaffRole | null;
+}
+
 export interface HumanHandOffResponse {
   id: string;
   conversation_id: string;
   status: HandoffStatus;
   triggered_by: HandoffTriggerType;
-  reason?: string;
+  reason?: string | null;
   requested_at: string;
-  claimed_at?: string;
-  resolved_at?: string;
-  assigned_staff_id?: string;
-  customer_name?: string;
-  customer_whatsapp_number?: string;
+  claimed_at?: string | null;
+  resolved_at?: string | null;
+  assigned_staff_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  /** Nested for the handoff list — saves a round-trip to render the row. */
+  conversation?: ConversationSummary | null;
+  staff?: StaffSummary | null;
 }

@@ -1,21 +1,44 @@
 "use client"
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { HiOutlineEnvelope, HiOutlineLockClosed } from 'react-icons/hi2'
+import { Suspense, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import {
+  HiOutlineEnvelope,
+  HiOutlineExclamationTriangle,
+  HiOutlineLockClosed,
+} from "react-icons/hi2"
 
-import BrandMark from '@/components/layout/BrandMark'
-import Button from '@/components/ui/Button'
-import Input from '@/components/ui/Input'
+import BrandMark from "@/components/layout/BrandMark"
+import Button from "@/components/ui/Button"
+import Input from "@/components/ui/Input"
+import { login } from "@/lib/api/auth"
 
-const LoginPage = () => {
+const LoginForm = () => {
   const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [submitting, setSubmitting] = useState(false)
+  const queryClient = useQueryClient()
+  const searchParams = useSearchParams()
+  const next = searchParams?.get("next") ?? "/dashboard"
 
-  const handleSubmit = () => {
-    setSubmitting(true)
-    router.push('/dashboard')
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+
+  const loginMutation = useMutation({
+    mutationFn: ({ u, p }: { u: string; p: string }) => login(u, p),
+    onSuccess: (data) => {
+      // Prime the `me` cache so the conversations page (and anything else
+      // gated on currentStaff) doesn't have to roundtrip immediately.
+      queryClient.setQueryData(["staff", "me"], data.staff)
+      router.push(next)
+    },
+  })
+
+  const errorMessage =
+    loginMutation.error instanceof Error ? loginMutation.error.message : null
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!username.trim() || !password) return
+    loginMutation.mutate({ u: username.trim(), p: password })
   }
 
   return (
@@ -32,29 +55,36 @@ const LoginPage = () => {
         </div>
 
         <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            handleSubmit()
-          }}
+          onSubmit={handleSubmit}
           className="bg-card border border-border-strong/80 rounded-card p-5 flex flex-col gap-3"
         >
+          {errorMessage && (
+            <div className="flex items-start gap-2 text-[11.5px] text-[#F09595] bg-[rgba(226,75,74,0.08)] border border-[rgba(226,75,74,0.25)] rounded-[8px] px-3 py-2">
+              <HiOutlineExclamationTriangle size={13} className="shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
           <label className="flex flex-col gap-1.5">
-            <span className="text-[11px] text-fg-muted">Email</span>
+            <span className="text-[11px] text-fg-muted">Email or username</span>
             <Input
-              value={email}
-              onChange={setEmail}
+              value={username}
+              onChange={setUsername}
               placeholder="you@example.com"
               icon={<HiOutlineEnvelope size={14} />}
+              autoComplete="username"
             />
           </label>
 
           <label className="flex flex-col gap-1.5">
             <span className="text-[11px] text-fg-muted">Password</span>
             <Input
+              type="password"
               value={password}
               onChange={setPassword}
               placeholder="••••••••"
               icon={<HiOutlineLockClosed size={14} />}
+              autoComplete="current-password"
             />
           </label>
 
@@ -71,21 +101,30 @@ const LoginPage = () => {
           <Button
             variant="primary"
             type="submit"
-            disabled={submitting}
+            disabled={loginMutation.isPending}
             className="w-full justify-center mt-1"
           >
-            {submitting ? 'Signing in…' : 'Sign in'}
+            {loginMutation.isPending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
 
         <p className="text-center text-[11.5px] text-fg-muted mt-4">
-          New to YapShop?{' '}
+          New to YapShop?{" "}
           <a href="#" className="text-[#6FD9A0] hover:underline">
             Request access
           </a>
         </p>
       </div>
     </div>
+  )
+}
+
+const LoginPage = () => {
+  // Wrap in Suspense — useSearchParams requires it under Next.js App Router.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }
 

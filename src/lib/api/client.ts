@@ -144,13 +144,13 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     if (newToken) {
       res = await send(newToken);
     } else {
+      // Real login isn't wired yet, and most endpoints are currently public.
+      // The few that aren't (e.g. /staff/) shouldn't take down the whole page
+      // with a forced redirect — surface the 401 as a normal query error so
+      // the rest of the UI keeps working. Restore the redirect once an auth
+      // gate sits in front of the protected pages.
       clearTokens();
-      if (typeof window !== "undefined") {
-        // Soft redirect — preserve where the user was trying to go.
-        const next = window.location.pathname + window.location.search;
-        window.location.href = `/login?next=${encodeURIComponent(next)}`;
-      }
-      throw new ApiError(401, null, "Session expired");
+      throw new ApiError(401, null, "Not authenticated");
     }
   }
 

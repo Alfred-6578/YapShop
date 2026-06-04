@@ -1,31 +1,65 @@
-import { api } from "./client";
-import type { HumanHandOffResponse } from "./types";
+import { api, qs } from "./client"
+import type { HumanHandOffResponse } from "./types"
+
+/** All handoffs across statuses — backend has no query-param filter. */
+export function listHandoffs(): Promise<HumanHandOffResponse[]> {
+  return api<HumanHandOffResponse[]>(`/handoffs/`)
+}
 
 export function listPendingHandoffs(): Promise<HumanHandOffResponse[]> {
-  return api<HumanHandOffResponse[]>(`/handoffs/pending`);
+  return api<HumanHandOffResponse[]>(`/handoffs/pending`)
 }
 
 export function listActiveHandoffs(): Promise<HumanHandOffResponse[]> {
-  return api<HumanHandOffResponse[]>(`/handoffs/active`);
+  return api<HumanHandOffResponse[]>(`/handoffs/active`)
 }
 
 export function getHandoff(id: string): Promise<HumanHandOffResponse> {
-  return api<HumanHandOffResponse>(`/handoffs/${id}`);
+  return api<HumanHandOffResponse>(`/handoffs/${id}`)
 }
 
-export function claimHandoff(id: string): Promise<HumanHandOffResponse> {
-  return api<HumanHandOffResponse>(`/handoffs/${id}/claim`, { method: "PUT" });
+/**
+ * Claim the next pending handoff. No id needed — backend picks the oldest
+ * pending one and assigns it to the calling staff member. Returns the claimed
+ * handoff with its conversation and staff populated.
+ */
+export function claimNextHandoff(): Promise<HumanHandOffResponse> {
+  return api<HumanHandOffResponse>(`/handoffs/claim`, { method: "POST" })
 }
 
+/**
+ * Mark a handoff as resolved. Status passed as query param (not body —
+ * matches the handoffs spec, different from orders which uses body).
+ */
 export function resolveHandoff(id: string): Promise<HumanHandOffResponse> {
-  return api<HumanHandOffResponse>(`/handoffs/${id}/resolve`, { method: "PUT" });
+  return api<HumanHandOffResponse>(
+    `/handoffs/${id}/status${qs({ new_status: "resolved" })}`,
+    { method: "PATCH" },
+  )
 }
 
+/** Cancel a handoff. No body. PATCH, not PUT. */
 export function cancelHandoff(id: string): Promise<HumanHandOffResponse> {
-  return api<HumanHandOffResponse>(`/handoffs/${id}/cancel`, { method: "PUT" });
+  return api<HumanHandOffResponse>(`/handoffs/${id}/cancel`, { method: "PATCH" })
+}
+
+/**
+ * Assign a handoff to a specific staff member. staff_id is a query param.
+ * Note: server uses POST (not PATCH) for this action.
+ */
+export function assignHandoff(
+  id: string,
+  staffId: string,
+): Promise<HumanHandOffResponse> {
+  return api<HumanHandOffResponse>(
+    `/handoffs/${id}/assign${qs({ staff_id: staffId })}`,
+    { method: "POST" },
+  )
 }
 
 /** Quick string status check for a conversation — cheap to poll. */
-export function checkConversationHandoffStatus(conversationId: string): Promise<string> {
-  return api<string>(`/handoffs/check/${conversationId}`);
+export function checkConversationHandoffStatus(
+  conversationId: string,
+): Promise<string> {
+  return api<string>(`/handoffs/check/${conversationId}`)
 }
