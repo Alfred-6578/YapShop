@@ -5,7 +5,14 @@
  */
 
 // ---------- enums ----------
-export type StaffRole = "admin" | "manager" | "support" | "agent";
+/**
+ * Staff role. Audit-confirmed values are owner/admin/support; widened with
+ * `(string & {})` so a future role from the backend doesn't break the type.
+ * The canonical definition (and its mutation-service consumers) lives in
+ * `./staff` — this re-declaration exists so `StaffResponse.role` doesn't
+ * have to take a circular type-import dependency on it.
+ */
+export type StaffRole = "owner" | "admin" | "support" | (string & {});
 
 export type OrderStatus = "pending" | "paid" | "shipped" | "delivered" | "cancelled";
 export type PaymentStatus = "pending" | "completed" | "failed";
