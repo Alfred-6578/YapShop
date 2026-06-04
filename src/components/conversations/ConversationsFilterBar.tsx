@@ -1,23 +1,21 @@
 "use client"
-import React from 'react'
-import { HiMagnifyingGlass } from 'react-icons/hi2'
+import React from "react"
+import { HiMagnifyingGlass, HiOutlineExclamationCircle } from "react-icons/hi2"
 
-import Input from '@/components/ui/Input'
-import SegmentedControl from '@/components/ui/SegmentedControl'
+import Input from "@/components/ui/Input"
+import SegmentedControl from "@/components/ui/SegmentedControl"
 
-export type ConversationStatusFilter =
-  | 'all'
-  | 'attention'
-  | 'with-staff'
-  | 'ai-only'
-  | 'ended'
+/** Maps directly to ConversationStatus on the API ("active"/"ended"), plus
+ *  "all" to skip the status query param. */
+export type ConversationStatusFilter = "all" | "active" | "ended"
 
 type Props = {
   search: string
   onSearchChange: (v: string) => void
   status: ConversationStatusFilter
   onStatusChange: (v: ConversationStatusFilter) => void
-  attentionCount: number
+  needsAttention: boolean
+  onNeedsAttentionChange: (v: boolean) => void
 }
 
 const ConversationsFilterBar = ({
@@ -25,24 +23,13 @@ const ConversationsFilterBar = ({
   onSearchChange,
   status,
   onStatusChange,
-  attentionCount,
+  needsAttention,
+  onNeedsAttentionChange,
 }: Props) => {
   const options: { value: ConversationStatusFilter; label: React.ReactNode }[] = [
-    { value: 'all', label: 'All' },
-    {
-      value: 'attention',
-      label: (
-        <>
-          Needs attention
-          <span className="text-[9.5px] bg-[rgba(240,169,43,0.22)] text-[#F0C36B] px-1.5 py-0 rounded-[4px] ml-1.5">
-            {attentionCount}
-          </span>
-        </>
-      ),
-    },
-    { value: 'with-staff', label: 'With staff' },
-    { value: 'ai-only', label: 'AI only' },
-    { value: 'ended', label: 'Ended' },
+    { value: "all", label: "All" },
+    { value: "active", label: "Active" },
+    { value: "ended", label: "Ended" },
   ]
 
   return (
@@ -55,8 +42,25 @@ const ConversationsFilterBar = ({
         icon={<HiMagnifyingGlass size={14} />}
       />
       <div className="overflow-x-hidden vsm:overflow-x-auto -mx-4 px-4 vsm:mx-0 vsm:px-0 vsm:overflow-visible">
-        <SegmentedControl options={options} value={status} onChange={onStatusChange} />
+        <SegmentedControl
+          options={options}
+          value={status}
+          onChange={onStatusChange}
+        />
       </div>
+      <button
+        type="button"
+        onClick={() => onNeedsAttentionChange(!needsAttention)}
+        className={`shrink-0 text-[11.5px] px-2.5 py-1.5 rounded-[8px] border inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+          needsAttention
+            ? "bg-[rgba(240,169,43,0.12)] border-[rgba(240,169,43,0.35)] text-[#F0C36B]"
+            : "bg-card border-border text-fg-muted hover:text-fg"
+        }`}
+        aria-pressed={needsAttention}
+      >
+        <HiOutlineExclamationCircle size={12} />
+        Needs attention
+      </button>
     </div>
   )
 }

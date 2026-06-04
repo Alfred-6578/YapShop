@@ -1,45 +1,60 @@
-import Card from '@/components/ui/Card';
-import HandoffRow from './HandoffRow';
-import type { Handoff } from '@/lib/handoffs/mockData';
-import { HiOutlineCheck, HiOutlinePause, HiOutlineClock } from 'react-icons/hi2';
+import Card from "@/components/ui/Card"
+import HandoffRow from "./HandoffRow"
+import type {
+  CustomerResponse,
+  HumanHandOffResponse,
+  StaffResponse,
+} from "@/lib/api/types"
+
+/** `assign` is included now so step 5 only adds wiring, not a type change. */
+export type PendingMutation =
+  | { id: string; kind: "resolve" | "cancel" | "assign" }
+  | null
 
 type Props = {
-  handoffs: Handoff[];
-  mode: 'pending' | 'active' | 'resolved';
-  onClaim?: (id: string) => void;
-};
+  handoffs: HumanHandOffResponse[]
+  staff: StaffResponse[]
+  /** Conversation-id keyed lookup so each row can render customer info that
+   *  the handoff API doesn't include on its nested conversation summary. */
+  customerByConversationId: Map<string, CustomerResponse>
+  pendingMutation: PendingMutation
+  onResolve: (id: string) => void
+  onCancel: (id: string) => void
+  onAssign: (id: string, staffId: string) => void
+  onOpenConversation: (conversationId: string) => void
+  emptyState?: React.ReactNode
+}
 
-const HandoffsList = ({ handoffs, mode, onClaim }: Props) => {
-  const iconByMode =
-    mode === 'pending' ? (
-      <HiOutlineCheck size={24} className="text-[#6FD9A0]" />
-    ) : mode === 'active' ? (
-      <HiOutlinePause size={24} className="text-fg-subtle" />
-    ) : (
-      <HiOutlineClock size={24} className="text-fg-subtle" />
-    );
-
-  const textByMode =
-    mode === 'pending'
-      ? 'All caught up — no customers waiting'
-      : mode === 'active'
-        ? 'No active handoffs'
-        : 'No resolved handoffs in this period';
-
+const HandoffsList = ({
+  handoffs,
+  staff,
+  customerByConversationId,
+  pendingMutation,
+  onResolve,
+  onCancel,
+  onAssign,
+  onOpenConversation,
+  emptyState,
+}: Props) => {
   return (
     <Card padded={false}>
-      {handoffs.length === 0 ? (
-        <div className="py-10 flex flex-col items-center gap-2">
-          {iconByMode}
-          <p className="text-[12px] text-fg-muted">{textByMode}</p>
-        </div>
-      ) : (
-        handoffs.map((h) => (
-          <HandoffRow key={h.id} handoff={h} mode={mode} onClaim={onClaim} />
-        ))
-      )}
+      {handoffs.length === 0
+        ? emptyState ?? null
+        : handoffs.map((h) => (
+            <HandoffRow
+              key={h.id}
+              handoff={h}
+              staff={staff}
+              customer={customerByConversationId.get(h.conversation_id) ?? null}
+              pendingMutation={pendingMutation}
+              onResolve={onResolve}
+              onCancel={onCancel}
+              onAssign={onAssign}
+              onOpenConversation={onOpenConversation}
+            />
+          ))}
     </Card>
-  );
-};
+  )
+}
 
-export default HandoffsList;
+export default HandoffsList

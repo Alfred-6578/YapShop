@@ -7,9 +7,19 @@ type Props = {
   value: string
   onChange: (v: string) => void
   className?: string
+  type?: "text" | "password" | "email"
+  autoComplete?: string
 }
 
-const Input = ({ icon, placeholder, value, onChange, className = '' }: Props) => {
+const Input = ({
+  icon,
+  placeholder,
+  value,
+  onChange,
+  className = '',
+  type = "text",
+  autoComplete,
+}: Props) => {
   const [focused, setFocused] = useState(false)
   return (
     <div
@@ -19,9 +29,10 @@ const Input = ({ icon, placeholder, value, onChange, className = '' }: Props) =>
     >
       {icon && <span className="text-fg-subtle text-[14px] inline-flex">{icon}</span>}
       <input
-        type="text"
+        type={type}
         value={value}
         placeholder={placeholder}
+        autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
