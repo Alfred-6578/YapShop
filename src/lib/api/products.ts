@@ -50,6 +50,15 @@ export async function searchProducts(
   return raw.map(normalizeProduct);
 }
 
+/**
+ * One media entry in a product write. Either a new `file` to upload OR a
+ * `url` of an existing item the server should keep. `is_live` always
+ * applies (per-media flag — "real vendor-shot" vs stock).
+ */
+export type ProductMediaInput =
+  | { file: File; is_live: boolean }
+  | { url: string; is_live: boolean };
+
 export interface ProductWritePayload {
   name: string;
   price: number;
@@ -57,18 +66,14 @@ export interface ProductWritePayload {
   sku?: string | null;
   category_id?: string | null;
   is_active?: boolean;
-  is_live?: boolean;
   tags?: string[];
-  /** New files to upload, appended as multipart `files` parts. */
-  files?: File[];
   /**
-   * Existing media URLs the server should preserve. Only meaningful on PUT —
-   * the edit form sends every existing slot's URL the user didn't remove.
-   * Without this, the server treats `files` as the complete new media list
-   * and drops every previously-uploaded item. Encoded as a JSON string for
-   * the same reason `tags` is — single multipart part, simpler server parse.
+   * Ordered list of every media slot the saved product should end up with.
+   * New uploads (file) and kept-existing (url) interleave in display order.
+   * The wire encoding splits them: uploads get indexed fields, kept items
+   * collect into a single JSON `keep_media` field. See buildProductFormData.
    */
-  keep_media?: string[];
+  media?: ProductMediaInput[];
 }
 
 function buildProductFormData(payload: ProductWritePayload): FormData {
@@ -79,16 +84,32 @@ function buildProductFormData(payload: ProductWritePayload): FormData {
   if (payload.sku) form.append("sku", payload.sku);
   if (payload.category_id) form.append("category_id", payload.category_id);
   if (payload.is_active !== undefined) form.append("is_active", String(payload.is_active));
-  if (payload.is_live !== undefined) form.append("is_live", String(payload.is_live));
   if (payload.tags && payload.tags.length > 0) {
     form.append("tags", JSON.stringify(payload.tags));
   }
-  if (payload.keep_media && payload.keep_media.length > 0) {
-    form.append("keep_media", JSON.stringify(payload.keep_media));
+
+  // Each uploaded file is paired with its is_live flag by INSERTION ORDER:
+  // both arrive at the server as parallel lists (FastAPI's `files: List[…]`
+  // + `is_live: List[bool]`), so the Nth `files` entry matches the Nth
+  // `is_live` entry. Appending them as a pair after each loop iteration
+  // keeps the alignment intact even if a non-file slot slips in later.
+  //
+  // Kept-existing items still encode as a single JSON `keep_media` field
+  // (URL + is_live per item). If backend also wants those interleaved with
+  // parallel `keep_media` / `keep_media_is_live` appends, we'll swap then.
+  const keeps: Array<{ url: string; is_live: boolean }> = [];
+  for (const m of payload.media ?? []) {
+    if ("file" in m) {
+      form.append("files", m.file);
+      form.append("is_live", String(m.is_live));
+    } else {
+      keeps.push({ url: m.url, is_live: m.is_live });
+    }
   }
-  if (payload.files) {
-    for (const file of payload.files) form.append("files", file);
+  if (keeps.length > 0) {
+    form.append("keep_media", JSON.stringify(keeps));
   }
+
   return form;
 }
 

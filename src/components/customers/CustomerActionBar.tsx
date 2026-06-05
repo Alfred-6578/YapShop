@@ -3,7 +3,7 @@ import Link from "next/link"
 import { HiEllipsisHorizontal, HiOutlinePencilSquare } from "react-icons/hi2"
 import { FaWhatsapp } from "react-icons/fa6"
 
-import { getDisplayName } from "@/lib/customers/utils"
+import CustomerNameLabel from "@/components/customers/CustomerNameLabel"
 import type { CustomerResponse } from "@/lib/api/types"
 
 type Props = { customer: CustomerResponse }
@@ -25,7 +25,7 @@ const CustomerActionBar = ({ customer }: Props) => {
           Customers
         </Link>
         <span className="text-fg-subtle mx-1.5">/</span>
-        <span className="text-fg font-medium">{getDisplayName(customer)}</span>
+        <CustomerNameLabel customer={customer} className="text-fg" />
       </nav>
 
       <button

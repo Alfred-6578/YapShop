@@ -169,9 +169,12 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
     }
     const message = describeApiError(res.status, payload, path);
     // Mirror the parsed payload into the console — DevTools can show structure
-    // the UI banner doesn't have room for.
+    // the UI banner doesn't have room for. 401/403 are expected auth/permission
+    // boundaries (e.g. support trying to read a staff-only endpoint) and get
+    // warn instead of error, so they don't dominate the dev console as bugs.
+    const log = res.status === 401 || res.status === 403 ? console.warn : console.error;
     // eslint-disable-next-line no-console
-    console.error(`[api] ${res.status} ${path}`, payload);
+    log(`[api] ${res.status} ${path}`, payload);
     throw new ApiError(res.status, payload, message);
   }
 

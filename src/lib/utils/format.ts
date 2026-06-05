@@ -1,6 +1,28 @@
+/**
+ * Parse a server-issued ISO timestamp to a UTC epoch (ms).
+ *
+ * FastAPI's default JSON serializer emits naive datetimes WITHOUT a timezone
+ * suffix (e.g. "2026-06-04T14:30:00" instead of "2026-06-04T14:30:00Z").
+ * JavaScript's `new Date()` interprets such strings as LOCAL time per spec —
+ * which silently shifts every server timestamp by the user's UTC offset. In
+ * Lagos (UTC+1), a row the server just created appears as "1h ago" because
+ * the parsed time is one hour behind real-now.
+ *
+ * This helper appends `Z` only when no timezone marker is present, leaving
+ * already-correct strings (with `Z`, `+HH:MM`, or `-HH:MM`) untouched.
+ */
+export function parseServerTime(iso: string): number {
+  if (!iso) return NaN
+  // Already has a TZ suffix? Pass through.
+  if (/[Zz]$/.test(iso)) return new Date(iso).getTime()
+  if (/[+-]\d{2}:?\d{2}$/.test(iso)) return new Date(iso).getTime()
+  // Naive — treat as UTC.
+  return new Date(iso + "Z").getTime()
+}
+
 /** Compact relative-time formatter: "now", "5m ago", "2h ago", "1d ago", "2w ago". */
 export function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime()
+  const then = parseServerTime(iso)
   if (Number.isNaN(then)) return ''
   const seconds = Math.max(0, Math.floor((Date.now() - then) / 1000))
   if (seconds < 60) return 'now'
@@ -20,8 +42,8 @@ export function formatRelative(iso: string): string {
  * Unlike formatRelative, no trailing " ago".
  */
 export function formatDuration(fromIso: string, endIso?: string): string {
-  const end = endIso ? new Date(endIso).getTime() : Date.now()
-  const start = new Date(fromIso).getTime()
+  const end = endIso ? parseServerTime(endIso) : Date.now()
+  const start = parseServerTime(fromIso)
   if (Number.isNaN(start) || Number.isNaN(end)) return ''
   const delta = Math.max(0, end - start)
   if (delta < 60_000) return '<1m'

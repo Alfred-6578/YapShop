@@ -14,6 +14,8 @@ export type PendingMutation =
 type Props = {
   handoffs: HumanHandOffResponse[]
   staff: StaffResponse[]
+  /** Drives the role-based gating on each row's Assign/Resolve/Cancel buttons. */
+  currentUser: StaffResponse | null
   /** Conversation-id keyed lookup so each row can render customer info that
    *  the handoff API doesn't include on its nested conversation summary. */
   customerByConversationId: Map<string, CustomerResponse>
@@ -28,6 +30,7 @@ type Props = {
 const HandoffsList = ({
   handoffs,
   staff,
+  currentUser,
   customerByConversationId,
   pendingMutation,
   onResolve,
@@ -45,6 +48,7 @@ const HandoffsList = ({
               key={h.id}
               handoff={h}
               staff={staff}
+              currentUser={currentUser}
               customer={customerByConversationId.get(h.conversation_id) ?? null}
               pendingMutation={pendingMutation}
               onResolve={onResolve}

@@ -5,8 +5,8 @@ import { LiaRobotSolid } from "react-icons/lia"
 
 import Card from "@/components/ui/Card"
 import { formatRelative } from "@/lib/utils/format"
-import { getDisplayName } from "@/lib/customers/utils"
 import { getCustomerColor, getCustomerInitials } from "@/lib/customers/visuals"
+import CustomerNameLabel from "@/components/customers/CustomerNameLabel"
 import type { ConversationResponse, CustomerResponse } from "@/lib/api/types"
 
 type Props = {
@@ -42,8 +42,8 @@ const ConversationHeader = ({
         <div className="flex-1 min-w-0">
           {customer ? (
             <>
-              <h1 className="text-[16px] font-medium tracking-tight truncate">
-                {getDisplayName(customer)}
+              <h1 className="text-[16px] tracking-tight truncate">
+                <CustomerNameLabel customer={customer} />
               </h1>
               <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] text-fg-muted mt-1">
                 <span className="inline-flex items-center gap-1 whitespace-nowrap">

@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { HiEllipsisHorizontal } from "react-icons/hi2"
 
-import { getDisplayName } from "@/lib/customers/utils"
+import CustomerNameLabel from "@/components/customers/CustomerNameLabel"
 import type { ConversationResponse, CustomerResponse } from "@/lib/api/types"
 
 type Props = {
@@ -11,8 +11,6 @@ type Props = {
 }
 
 const ConversationActionBar = ({ customer }: Props) => {
-  const label = customer ? getDisplayName(customer) : "…"
-
   return (
     <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border">
       <nav
@@ -26,7 +24,11 @@ const ConversationActionBar = ({ customer }: Props) => {
           Conversations
         </Link>
         <span className="text-fg-subtle mx-1.5">/</span>
-        <span className="text-fg font-medium">{label}</span>
+        {customer ? (
+          <CustomerNameLabel customer={customer} className="text-fg" />
+        ) : (
+          <span className="text-fg font-medium">…</span>
+        )}
       </nav>
 
       <button

@@ -1,27 +1,33 @@
 import { api } from "./client"
-import type {
-  MessageDirection,
-  MessageResponse,
-  MessageStatus,
-  MessageType,
-  SenderType,
-} from "./types"
+import type { MessageResponse } from "./types"
 
-export interface SendMessagePayload {
-  conversation_id: string
-  sender_type: SenderType
-  staff_id?: string | null
-  direction: MessageDirection
-  message_type: MessageType
-  content: string
-  media_urls?: string[]
-  status?: MessageStatus
+export interface SendStaffMessagePayload {
+  text: string
+  /**
+   * Optional but recommended — lets the backend attribute the message to the
+   * sending staff member. Without it, the message still goes out but won't be
+   * tied to a specific operator in audit logs.
+   */
+  staff_id?: string
 }
 
-export function sendMessage(
-  payload: SendMessagePayload,
+/**
+ * Staff replying to a customer from the dashboard. The backend:
+ *  1. Saves the message to the DB.
+ *  2. Dispatches it to the customer over WhatsApp.
+ *  3. Broadcasts a `new_message` WebSocket event to all dashboard clients.
+ *
+ * Callers must NOT manually append the message to the local cache — wait for
+ * the WS event so every open tab stays in sync. The realtime handler in
+ * lib/realtime/eventHandlers.ts invalidates `["messages","conversation",id]`
+ * on `new_message`, which causes the thread to refetch and render the new
+ * row.
+ */
+export function sendStaffMessage(
+  conversationId: string,
+  payload: SendStaffMessagePayload,
 ): Promise<MessageResponse> {
-  return api<MessageResponse>(`/messages/`, {
+  return api<MessageResponse>(`/conversations/${conversationId}/send`, {
     method: "POST",
     body: payload,
   })

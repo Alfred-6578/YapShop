@@ -101,9 +101,25 @@ export function getCustomerActivityTag(
   return { kind: "in-chat", label: "In chat" }
 }
 
-/** Display name: prefer display_name, fall back to name, fall back to phone. */
+/**
+ * Primary name: prefer the formal `name`, fall back to `display_name`,
+ * fall back to the WhatsApp number. Use this when you need a single string —
+ * dialog titles, breadcrumbs without styling, etc. For UI labels prefer
+ * <CustomerNameLabel /> which renders the secondary name too.
+ */
 export function getDisplayName(customer: CustomerResponse): string {
   return (
-    customer.display_name || customer.name || customer.whatsapp_number
+    customer.name || customer.display_name || customer.whatsapp_number
   )
+}
+
+/**
+ * The shorter / informal name to render in parentheses after the primary.
+ * Returns null when there's nothing meaningful to show — either field is
+ * missing, or both fields hold the same value (would render as "Ada (Ada)").
+ */
+export function getSecondaryName(customer: CustomerResponse): string | null {
+  if (!customer.name || !customer.display_name) return null
+  if (customer.name === customer.display_name) return null
+  return customer.display_name
 }

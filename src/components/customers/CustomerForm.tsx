@@ -14,7 +14,8 @@ import Textarea from "@/components/ui/Textarea"
 import Field from "@/components/ui/Field"
 import TagsInput from "@/components/ui/TagsInput"
 import { getDisplayName } from "@/lib/customers/utils"
-import type { CustomerResponse } from "@/lib/api/types"
+import { canDeleteCustomer } from "@/lib/customers/permissions"
+import type { CustomerResponse, StaffResponse } from "@/lib/api/types"
 
 export type CustomerFormValues = {
   name: string
@@ -27,6 +28,8 @@ export type CustomerFormValues = {
 
 type Props = {
   customer: CustomerResponse
+  /** Drives the "Delete customer" button visibility (admin/owner only). */
+  currentUser: StaffResponse | null
   onSubmit: (values: CustomerFormValues) => void
   onCancel: () => void
   onDelete: () => void
@@ -36,12 +39,14 @@ type Props = {
 
 const CustomerForm = ({
   customer,
+  currentUser,
   onSubmit,
   onCancel,
   onDelete,
   isSubmitting = false,
   submitError,
 }: Props) => {
+  const showDelete = canDeleteCustomer(currentUser)
   const md = customer.extra_metadata ?? {}
   const initialNotes = typeof md.notes === "string" ? md.notes : ""
   const initialTags = Array.isArray(md.tags)
@@ -176,15 +181,19 @@ const CustomerForm = ({
       </div>
 
       <div className="flex items-center justify-between gap-2 px-4 py-3.5 border-t border-border bg-bg">
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={isSubmitting}
-          className="text-[#F09595] text-[12.5px] inline-flex items-center gap-1.5 cursor-pointer hover:text-[#F0B5B5] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <HiOutlineTrash size={13} />
-          Delete customer
-        </button>
+        {showDelete ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isSubmitting}
+            className="text-[#F09595] text-[12.5px] inline-flex items-center gap-1.5 cursor-pointer hover:text-[#F0B5B5] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <HiOutlineTrash size={13} />
+            Delete customer
+          </button>
+        ) : (
+          <div />
+        )}
         <div className="flex items-center gap-2">
           <Button onClick={onCancel} disabled={isSubmitting}>
             Cancel

@@ -16,13 +16,14 @@ const formatWait = (iso: string): string => {
 }
 
 const RailHandoffQueue = () => {
-  // Share cache with the main handoffs page — `/handoffs/pending` requires
-  // auth, but `/handoffs/` is public. Client-filtering for pending status
-  // also means one less HTTP round-trip when navigating between the rail
-  // and the main page.
+  // We pass `?status=pending` so the backend CAN filter server-side, but
+  // also client-filter as a safety net — current backend ignores unknown
+  // query params and returns all rows. Once backend honors the filter,
+  // the client filter becomes a no-op. Cache key carries the param so this
+  // query doesn't collide with the main page's unfiltered ["handoffs","list"].
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["handoffs", "list"],
-    queryFn: listHandoffs,
+    queryKey: ["handoffs", "list", { status: "pending" }],
+    queryFn: () => listHandoffs({ status: "pending" }),
     staleTime: 30_000,
   })
 

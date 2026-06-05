@@ -1,17 +1,20 @@
 import { api, qs } from "./client"
-import type { HumanHandOffResponse } from "./types"
+import type { HandoffStatus, HumanHandOffResponse } from "./types"
 
-/** All handoffs across statuses — backend has no query-param filter. */
-export function listHandoffs(): Promise<HumanHandOffResponse[]> {
-  return api<HumanHandOffResponse[]>(`/handoffs/`)
+export interface ListHandoffsParams {
+  /** Filter to a single status. Omit to fetch all. */
+  status?: HandoffStatus
 }
 
-export function listPendingHandoffs(): Promise<HumanHandOffResponse[]> {
-  return api<HumanHandOffResponse[]>(`/handoffs/pending`)
-}
-
-export function listActiveHandoffs(): Promise<HumanHandOffResponse[]> {
-  return api<HumanHandOffResponse[]>(`/handoffs/active`)
+/**
+ * List handoffs, optionally filtered by status. The rail uses
+ * `{status: "pending"}` for the queue panel; the main handoffs page calls
+ * with no params and gets everything.
+ */
+export function listHandoffs(
+  params: ListHandoffsParams = {},
+): Promise<HumanHandOffResponse[]> {
+  return api<HumanHandOffResponse[]>(`/handoffs/${qs(params)}`)
 }
 
 export function getHandoff(id: string): Promise<HumanHandOffResponse> {

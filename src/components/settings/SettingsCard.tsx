@@ -7,6 +7,8 @@ import {
 import { LiaRobotSolid } from "react-icons/lia"
 
 import type { IconSlot, IconTone, SettingGroup } from "@/lib/settings/registry"
+import type { StaffResponse } from "@/lib/api/types"
+import { canEditSettingKey } from "@/lib/settings/permissions"
 import { SettingField } from "./SettingField"
 
 const TONE_STYLES: Record<IconTone, string> = {
@@ -31,6 +33,8 @@ interface SettingsCardProps {
   group: SettingGroup
   values: Record<string, unknown>
   dirtyKeys: string[]
+  /** Drives per-field disabled state via canEditSettingKey. */
+  currentUser: StaffResponse | null
   onChange: (key: string, value: unknown) => void
 }
 
@@ -38,8 +42,10 @@ export function SettingsCard({
   group,
   values,
   dirtyKeys,
+  currentUser,
   onChange,
 }: SettingsCardProps) {
+  const fieldDisabled = (key: string) => !canEditSettingKey(currentUser, key)
   const Icon = ICON_BY_SLOT[group.icon]
 
   // Special-case the store_identity card: store name (full width) on top,
@@ -55,6 +61,7 @@ export function SettingsCard({
             def={storeName}
             value={values[storeName.key]}
             isDirty={dirtyKeys.includes(storeName.key)}
+            disabled={fieldDisabled(storeName.key)}
             onChange={(v) => onChange(storeName.key, v)}
           />
           <div className="grid grid-cols-2 gap-2.5">
@@ -62,12 +69,14 @@ export function SettingsCard({
               def={currency}
               value={values[currency.key]}
               isDirty={dirtyKeys.includes(currency.key)}
+              disabled={fieldDisabled(currency.key)}
               onChange={(v) => onChange(currency.key, v)}
             />
             <SettingField
               def={timezone}
               value={values[timezone.key]}
               isDirty={dirtyKeys.includes(timezone.key)}
+              disabled={fieldDisabled(timezone.key)}
               onChange={(v) => onChange(timezone.key, v)}
             />
           </div>
@@ -81,6 +90,7 @@ export function SettingsCard({
         def={def}
         value={values[def.key]}
         isDirty={dirtyKeys.includes(def.key)}
+        disabled={fieldDisabled(def.key)}
         onChange={(v) => onChange(def.key, v)}
       />
     ))

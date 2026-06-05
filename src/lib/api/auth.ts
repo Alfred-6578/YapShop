@@ -54,12 +54,13 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
-  // Best-effort server logout; we clear locally either way.
+  // Best-effort server logout — we clear locally either way. Routing through
+  // `api()` attaches the Bearer token so the backend can invalidate the
+  // refresh token / session, not just blindly accept the call. If the token
+  // is already expired (401) or the network is down, the local clear below
+  // still runs.
   try {
-    await fetch(`${API_BASE}/auth/logout`, {
-      method: "POST",
-      headers: { "ngrok-skip-browser-warning": "true" },
-    })
+    await api<void>("/auth/logout", { method: "POST" })
   } catch {
     /* ignore */
   }
