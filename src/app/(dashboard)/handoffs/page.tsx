@@ -20,7 +20,7 @@ import {
   listHandoffs,
   resolveHandoff,
 } from "@/lib/api/handoffs"
-import { listStaff } from "@/lib/api/staff"
+import { getCurrentStaff, listStaff } from "@/lib/api/staff"
 import { listConversations } from "@/lib/api/conversations"
 import { listCustomers } from "@/lib/api/customers"
 import type { CustomerResponse } from "@/lib/api/types"
@@ -32,7 +32,7 @@ const HandoffsPage = () => {
 
   const handoffsQuery = useQuery({
     queryKey: ["handoffs", "list"],
-    queryFn: listHandoffs,
+    queryFn: () => listHandoffs(),
     staleTime: 15_000,
     // Refetches now ride on the realtime `new_handoff` / `handoff_claimed`
     // events from RealtimeProvider — no more polling timer.
@@ -42,6 +42,15 @@ const HandoffsPage = () => {
     queryKey: ["staff", "list"],
     queryFn: listStaff,
     staleTime: 5 * 60_000,
+  })
+
+  // Current user — drives permission gates on action buttons. Long staleTime
+  // since the logged-in operator's role doesn't change within a session.
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
   })
 
   // Handoff list doesn't include customer info on the nested `conversation`.
@@ -177,6 +186,7 @@ const HandoffsPage = () => {
           <HandoffsList
             handoffs={visible}
             staff={staff}
+            currentUser={meQuery.data ?? null}
             customerByConversationId={customerByConversationId}
             pendingMutation={pendingMutation}
             onResolve={(id) => resolveMutation.mutate(id)}

@@ -14,21 +14,36 @@ import {
   listSettings,
   type SettingResponse,
 } from "@/lib/api/settings"
+import { getCurrentStaff } from "@/lib/api/staff"
 import {
   REGISTRY_BY_KEY,
   SETTINGS_REGISTRY,
 } from "@/lib/settings/registry"
+import {
+  canEditSettingKey,
+  canEditSettings,
+} from "@/lib/settings/permissions"
 import { parseValue, serializeValue } from "@/lib/settings/serialize"
 import { SettingsCard } from "@/components/settings/SettingsCard"
 
 const SettingsPage = () => {
   const queryClient = useQueryClient()
 
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
+  })
+
   const settingsQuery = useQuery({
     queryKey: ["settings", "list"],
     queryFn: listSettings,
     staleTime: 5 * 60_000,
   })
+
+  const me = meQuery.data ?? null
+  const editingAllowed = canEditSettings(me)
 
   // key → parsed value, falling back to registry default when a key doesn't
   // exist yet on the backend.
@@ -97,6 +112,9 @@ const SettingsPage = () => {
   })
 
   const handleChange = (key: string, value: unknown) => {
+    // Backend will reject anyway, but blocking at the input prevents the user
+    // from typing into a field they can't save and getting a confusing 403.
+    if (!canEditSettingKey(me, key)) return
     setFormValues((prev) => ({ ...prev, [key]: value }))
   }
 
@@ -134,16 +152,18 @@ const SettingsPage = () => {
           </div>
         )}
 
-        <button
-          onClick={handleDiscard}
-          disabled={!isDirty || saveMutation.isPending}
-          className="text-[12px] px-3 py-1.5 rounded-[7px] border border-border text-fg hover:bg-card-hover disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-        >
-          Discard
-        </button>
+        {editingAllowed && (
+          <button
+            onClick={handleDiscard}
+            disabled={!isDirty || saveMutation.isPending}
+            className="text-[12px] px-3 py-1.5 rounded-[7px] border border-border text-fg hover:bg-card-hover disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+          >
+            Discard
+          </button>
+        )}
         <button
           onClick={handleSaveAll}
-          disabled={!isDirty || saveMutation.isPending}
+          disabled={!editingAllowed || !isDirty || saveMutation.isPending}
           className="text-[12px] font-medium px-3 py-1.5 rounded-[7px] bg-accent text-accent-fg inline-flex items-center gap-1.5 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
         >
           {saveMutation.isPending ? (
@@ -202,6 +222,7 @@ const SettingsPage = () => {
               group={group}
               values={formValues}
               dirtyKeys={dirtyKeys}
+              currentUser={me}
               onChange={handleChange}
             />
           ))

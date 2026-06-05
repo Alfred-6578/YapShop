@@ -8,11 +8,24 @@ import {
 } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 
+import { getAccessToken } from "@/lib/api/tokens"
+
 import { handleRealtimeEvent, type RealtimeEvent } from "./eventHandlers"
 
 const WS_URL =
   process.env.NEXT_PUBLIC_WS_URL ??
   "wss://bulldozer-eel-visa.ngrok-free.dev/ws"
+
+/**
+ * Build the WebSocket URL with auth attached. Most FastAPI WS auth setups
+ * read a `?token=` query param (the upgrade handshake can't carry custom
+ * headers like REST does). If the backend uses a different scheme — e.g.
+ * Sec-WebSocket-Protocol or a /ws/{token} path — swap this here.
+ */
+function buildWsUrl(token: string): string {
+  const sep = WS_URL.includes("?") ? "&" : "?"
+  return `${WS_URL}${sep}token=${encodeURIComponent(token)}`
+}
 
 export type ConnectionStatus =
   | "connecting"
@@ -43,11 +56,21 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
     const connect = () => {
       if (stoppedRef.current) return
 
+      // No token → don't try to connect. AuthGuard normally prevents this
+      // tree from mounting at all, but a token revoked mid-session would
+      // land us here. Bail to "disconnected" so the UI status badge
+      // reflects reality, and let the next mount (post re-login) try again.
+      const token = getAccessToken()
+      if (!token) {
+        setStatus("disconnected")
+        return
+      }
+
       setStatus(
         reconnectAttemptRef.current === 0 ? "connecting" : "reconnecting",
       )
 
-      const ws = new WebSocket(WS_URL)
+      const ws = new WebSocket(buildWsUrl(token))
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -65,9 +88,14 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      ws.onerror = (err) => {
-        console.error("[realtime] socket error", err)
-        // Don't close here — onclose will fire and own reconnection.
+      ws.onerror = () => {
+        // WebSocket errors are intentionally opaque (empty Event object —
+        // browsers won't leak why). The follow-up `onclose` carries the
+        // close code if you need to inspect it. Demoted to warn so failed
+        // connections don't show up as red console.errors in dev.
+        console.warn(
+          "[realtime] socket error — will reconnect via onclose handler",
+        )
       }
 
       ws.onclose = () => {

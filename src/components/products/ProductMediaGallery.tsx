@@ -70,6 +70,24 @@ const ProductMediaGallery = ({ product }: Props) => {
                 {isVideoMedia(selected) ? "Primary · Video" : "Primary"}
               </span>
             )}
+
+            {/* Per-item Live/Stock pill — mirrors the form's edit toggle
+                but read-only here. Always shown so operators can verify at
+                a glance whether the AI will use this item as proof. */}
+            <span
+              className={`absolute bottom-2 left-2 inline-flex items-center gap-1.5 text-[10.5px] font-medium px-2 py-1 rounded-[6px] ${
+                (selected.is_live ?? true)
+                  ? "bg-accent/85 text-accent-fg"
+                  : "bg-black/55 text-fg-muted"
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  (selected.is_live ?? true) ? "bg-accent-fg" : "bg-fg-subtle"
+                }`}
+              />
+              {(selected.is_live ?? true) ? "Live" : "Stock"}
+            </span>
           </div>
 
           {media.length > 1 && (
@@ -77,14 +95,17 @@ const ProductMediaGallery = ({ product }: Props) => {
               {media.map((m, i) => {
                 const isVid = isVideoMedia(m)
                 const selectedRing = i === safeIndex ? "ring-2 ring-accent ring-offset-2 ring-offset-card" : ""
+                const isLive = m.is_live ?? true
                 return (
                   <button
                     type="button"
                     key={i}
                     onClick={() => setSelectedIndex(i)}
-                    aria-label={isVid ? `View video ${i + 1}` : `View photo ${i + 1}`}
+                    aria-label={`${isVid ? "Video" : "Photo"} ${i + 1} (${
+                      isLive ? "live" : "stock"
+                    })`}
                     aria-pressed={i === safeIndex}
-                    className={`rounded-[7px] transition-transform hover:scale-[1.04] cursor-pointer ${selectedRing}`}
+                    className={`relative rounded-[7px] transition-transform hover:scale-[1.04] cursor-pointer ${selectedRing}`}
                   >
                     {isVid && m.url ? (
                       <div className="relative h-16 w-16 rounded-[7px] overflow-hidden bg-black">
@@ -107,6 +128,24 @@ const ProductMediaGallery = ({ product }: Props) => {
                         initials={getProductInitials(product)}
                       />
                     )}
+
+                    {/* Read-only live indicator. Filled accent dot = live;
+                        hollow dim dot = stock. Matches the toggle visual
+                        used by the form so operators learn one symbol. */}
+                    <span
+                      title={isLive ? "Live" : "Stock"}
+                      className={`absolute bottom-1 left-1 h-4 w-4 rounded-full flex items-center justify-center ${
+                        isLive
+                          ? "bg-accent ring-1 ring-black/40"
+                          : "bg-black/60 ring-1 ring-white/40"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isLive ? "bg-accent-fg" : "bg-fg-subtle"
+                        }`}
+                      />
+                    </span>
                   </button>
                 )
               })}

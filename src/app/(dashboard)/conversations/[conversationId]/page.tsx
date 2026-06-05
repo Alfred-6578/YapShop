@@ -15,9 +15,11 @@ import {
   startHandoff,
 } from "@/lib/api/conversations"
 import { getCustomer } from "@/lib/api/customers"
-import { getMessagesForConversation, sendMessage } from "@/lib/api/messages"
+import {
+  getMessagesForConversation,
+  sendStaffMessage,
+} from "@/lib/api/messages"
 import { getCurrentStaff, listStaff } from "@/lib/api/staff"
-import type { MessageResponse } from "@/lib/api/types"
 
 const ConversationDetailPage = () => {
   const router = useRouter()
@@ -65,60 +67,17 @@ const ConversationDetailPage = () => {
     retry: false,
   })
 
+  // No optimistic append — the backend broadcasts `new_message` over the
+  // WebSocket on success, and lib/realtime/eventHandlers.ts invalidates the
+  // thread cache, which causes the message to land in EVERY open tab at the
+  // same moment (this tab included). One source of truth for "is the message
+  // there yet": the WS event.
   const sendMutation = useMutation({
     mutationFn: (content: string) =>
-      sendMessage({
-        conversation_id: conversationId,
-        sender_type: "staff",
-        staff_id: meQuery.data!.id,
-        direction: "outbound",
-        message_type: "text",
-        content,
-        status: "sent",
+      sendStaffMessage(conversationId, {
+        text: content,
+        staff_id: meQuery.data?.id,
       }),
-    // Optimistic update — paint the message into the thread before the
-    // server confirms. The temp id is replaced on `onSettled` invalidation.
-    onMutate: async (content) => {
-      const queryKey = ["messages", "conversation", conversationId]
-      await queryClient.cancelQueries({ queryKey })
-      const previous = queryClient.getQueryData<MessageResponse[]>(queryKey)
-
-      const now = new Date().toISOString()
-      const tempMessage: MessageResponse = {
-        id: `temp-${Date.now()}`,
-        conversation_id: conversationId,
-        sender_type: "staff",
-        staff_id: meQuery.data!.id,
-        direction: "outbound",
-        message_type: "text",
-        content,
-        media_urls: [],
-        status: "sent",
-        whatsapp_message_id: null,
-        created_at: now,
-        updated_at: now,
-      }
-
-      queryClient.setQueryData<MessageResponse[]>(queryKey, (old = []) => [
-        ...old,
-        tempMessage,
-      ])
-
-      return { previous }
-    },
-    onError: (_err, _content, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(
-          ["messages", "conversation", conversationId],
-          context.previous,
-        )
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["messages", "conversation", conversationId],
-      })
-    },
   })
 
   const takeOverMutation = useMutation({

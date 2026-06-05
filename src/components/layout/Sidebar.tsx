@@ -15,7 +15,7 @@ import { LiaHeadsetSolid } from 'react-icons/lia'
 
 import BrandMark from './BrandMark'
 import NavItem from './NavItem'
-import Avatar from '@/components/ui/Avatar'
+import UserMenu from './UserMenu'
 
 const navItems = [
   { icon: <HiOutlineSquares2X2 size={18} />, label: 'Dashboard', href: '/dashboard' },
@@ -64,14 +64,7 @@ const Sidebar = () => {
             href="/settings"
             active={pathname?.startsWith('/settings')}
           />
-          <div className="flex items-center gap-3 px-3 h-10">
-            <span className="shrink-0">
-              <Avatar name="Admin" size="md" />
-            </span>
-            <span className="text-[12.5px] font-medium whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-150">
-              Admin
-            </span>
-          </div>
+          <UserMenu placement="sidebar" />
         </div>
       </aside>
     </>

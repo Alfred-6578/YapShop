@@ -3,7 +3,7 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 
 import { listConversations } from "./api/conversations";
-import { listPendingHandoffs } from "./api/handoffs";
+import { listHandoffs } from "./api/handoffs";
 import { listOrderItems, listOrders } from "./api/orders";
 import type {
   HumanHandOffResponse,
@@ -245,8 +245,8 @@ export interface HandoffQueueItem extends HumanHandOffResponse {
 }
 export function useHandoffQueue() {
   return useQuery({
-    queryKey: ["handoffs", "pending"],
-    queryFn: listPendingHandoffs,
+    queryKey: ["handoffs", "list", { status: "pending" }],
+    queryFn: () => listHandoffs({ status: "pending" }),
     refetchInterval: 15_000,
     select: (data): HandoffQueueItem[] => {
       // Defensive: backend may return array OR wrapper. Verify and tighten later.

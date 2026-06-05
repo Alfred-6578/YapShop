@@ -11,7 +11,14 @@ import {
 import { LiaRobotSolid } from "react-icons/lia"
 
 import AssignStaffDropdown from "./AssignStaffDropdown"
+import CustomerNameLabel from "@/components/customers/CustomerNameLabel"
 import { getWaitBucket } from "@/lib/handoffs/utils"
+import {
+  canAssignHandoff,
+  canCancelHandoff,
+  canReassignHandoff,
+  canResolveHandoff,
+} from "@/lib/handoffs/permissions"
 import { getDisplayName } from "@/lib/customers/utils"
 import type {
   CustomerResponse,
@@ -24,6 +31,9 @@ import type { PendingMutation } from "./HandoffsList"
 type Props = {
   handoff: HumanHandOffResponse
   staff: StaffResponse[]
+  /** Drives role-based gating on Assign / Resolve / Cancel buttons. Support
+   *  only sees Resolve/Cancel when assigned_staff_id matches them. */
+  currentUser: StaffResponse | null
   /** Resolved via the page-level conversation→customer lookup. Null until the
    *  conversations + customers queries load (rows render with placeholders). */
   customer: CustomerResponse | null
@@ -105,6 +115,7 @@ const TriggerTag = ({ triggered_by }: { triggered_by: HandoffTriggerType }) => {
 const HandoffRow = ({
   handoff,
   staff,
+  currentUser,
   customer,
   pendingMutation,
   onResolve,
@@ -112,6 +123,11 @@ const HandoffRow = ({
   onAssign,
   onOpenConversation,
 }: Props) => {
+  const showAssign = canAssignHandoff(currentUser)
+  const showReassign = canReassignHandoff(currentUser)
+  const showResolve = canResolveHandoff(currentUser, handoff)
+  const showCancel = canCancelHandoff(currentUser, handoff)
+
   const mode: "pending" | "active" | "resolved" =
     handoff.status === "pending"
       ? "pending"
@@ -170,7 +186,14 @@ const HandoffRow = ({
 
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[12.5px] text-fg font-medium">{customerName}</span>
+          {customer ? (
+            <CustomerNameLabel
+              customer={customer}
+              className="text-[12.5px] text-fg"
+            />
+          ) : (
+            <span className="text-[12.5px] text-fg font-medium">{customerName}</span>
+          )}
           {customerWa && (
             <span className="font-mono text-[10.5px] text-fg-subtle">
               {customerWa}
@@ -228,93 +251,103 @@ const HandoffRow = ({
 
           {mode === "pending" && (
             <>
-              <AssignStaffDropdown
-                staff={staff}
-                currentlyAssignedStaffId={handoff.assigned_staff_id}
-                onAssign={(staffId) => onAssign(handoff.id, staffId)}
-                disabled={anyMutationOnPage}
-                trigger={
-                  isAssigningThisRow ? (
-                    <>
-                      <HiOutlineArrowPath size={12} className="animate-spin" />
-                      Assigning…
-                    </>
+              {showAssign && (
+                <AssignStaffDropdown
+                  staff={staff}
+                  currentlyAssignedStaffId={handoff.assigned_staff_id}
+                  onAssign={(staffId) => onAssign(handoff.id, staffId)}
+                  disabled={anyMutationOnPage}
+                  trigger={
+                    isAssigningThisRow ? (
+                      <>
+                        <HiOutlineArrowPath size={12} className="animate-spin" />
+                        Assigning…
+                      </>
+                    ) : (
+                      <>
+                        <HiOutlineUserPlus size={12} />
+                        Assign
+                      </>
+                    )
+                  }
+                />
+              )}
+              {showCancel && (
+                <button
+                  type="button"
+                  onClick={() => onCancel(handoff.id)}
+                  disabled={anyMutationOnPage}
+                  aria-label={isCancellingThisRow ? "Cancelling…" : "Cancel handoff"}
+                  className="bg-transparent border-[0.5px] border-border rounded-[7px] px-2 py-1.5 text-[#F09595] hover:bg-[rgba(226,75,74,0.08)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
+                >
+                  {isCancellingThisRow ? (
+                    <HiOutlineArrowPath size={13} className="animate-spin" />
                   ) : (
-                    <>
-                      <HiOutlineUserPlus size={12} />
-                      Assign
-                    </>
-                  )
-                }
-              />
-              <button
-                type="button"
-                onClick={() => onCancel(handoff.id)}
-                disabled={anyMutationOnPage}
-                aria-label={isCancellingThisRow ? "Cancelling…" : "Cancel handoff"}
-                className="bg-transparent border-[0.5px] border-border rounded-[7px] px-2 py-1.5 text-[#F09595] hover:bg-[rgba(226,75,74,0.08)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
-              >
-                {isCancellingThisRow ? (
-                  <HiOutlineArrowPath size={13} className="animate-spin" />
-                ) : (
-                  <HiOutlineXMark size={13} />
-                )}
-              </button>
+                    <HiOutlineXMark size={13} />
+                  )}
+                </button>
+              )}
             </>
           )}
 
           {mode === "active" && (
             <>
-              <AssignStaffDropdown
-                staff={staff}
-                currentlyAssignedStaffId={handoff.assigned_staff_id}
-                onAssign={(staffId) => onAssign(handoff.id, staffId)}
-                disabled={anyMutationOnPage}
-                trigger={
-                  isAssigningThisRow ? (
+              {showReassign && (
+                <AssignStaffDropdown
+                  staff={staff}
+                  currentlyAssignedStaffId={handoff.assigned_staff_id}
+                  onAssign={(staffId) => onAssign(handoff.id, staffId)}
+                  disabled={anyMutationOnPage}
+                  trigger={
+                    isAssigningThisRow ? (
+                      <>
+                        <HiOutlineArrowPath size={12} className="animate-spin" />
+                        Reassigning…
+                      </>
+                    ) : (
+                      <>
+                        <HiOutlineUserPlus size={12} />
+                        Reassign
+                      </>
+                    )
+                  }
+                />
+              )}
+              {showResolve && (
+                <button
+                  type="button"
+                  onClick={() => onResolve(handoff.id)}
+                  disabled={anyMutationOnPage}
+                  className="bg-accent text-accent-fg font-medium text-[11.5px] px-3 py-1.5 rounded-[7px] flex items-center gap-1 hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {isResolvingThisRow ? (
                     <>
                       <HiOutlineArrowPath size={12} className="animate-spin" />
-                      Reassigning…
+                      Resolving…
                     </>
                   ) : (
                     <>
-                      <HiOutlineUserPlus size={12} />
-                      Reassign
+                      <HiOutlineCheck size={12} />
+                      Resolve
                     </>
-                  )
-                }
-              />
-              <button
-                type="button"
-                onClick={() => onResolve(handoff.id)}
-                disabled={anyMutationOnPage}
-                className="bg-accent text-accent-fg font-medium text-[11.5px] px-3 py-1.5 rounded-[7px] flex items-center gap-1 hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {isResolvingThisRow ? (
-                  <>
-                    <HiOutlineArrowPath size={12} className="animate-spin" />
-                    Resolving…
-                  </>
-                ) : (
-                  <>
-                    <HiOutlineCheck size={12} />
-                    Resolve
-                  </>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onCancel(handoff.id)}
-                disabled={anyMutationOnPage}
-                aria-label={isCancellingThisRow ? "Cancelling…" : "Cancel handoff"}
-                className="bg-transparent border-[0.5px] border-border rounded-[7px] px-2 py-1.5 text-[#F09595] hover:bg-[rgba(226,75,74,0.08)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
-              >
-                {isCancellingThisRow ? (
-                  <HiOutlineArrowPath size={13} className="animate-spin" />
-                ) : (
-                  <HiOutlineXMark size={13} />
-                )}
-              </button>
+                  )}
+                </button>
+              )}
+              {showCancel && (
+                <button
+                  type="button"
+                  onClick={() => onCancel(handoff.id)}
+                  disabled={anyMutationOnPage}
+                  aria-label={isCancellingThisRow ? "Cancelling…" : "Cancel handoff"}
+                  className="bg-transparent border-[0.5px] border-border rounded-[7px] px-2 py-1.5 text-[#F09595] hover:bg-[rgba(226,75,74,0.08)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer inline-flex items-center"
+                >
+                  {isCancellingThisRow ? (
+                    <HiOutlineArrowPath size={13} className="animate-spin" />
+                  ) : (
+                    <HiOutlineXMark size={13} />
+                  )}
+                </button>
+              )}
             </>
           )}
         </div>

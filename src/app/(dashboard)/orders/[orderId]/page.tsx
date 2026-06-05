@@ -11,6 +11,7 @@ import OrderPaymentCard from "@/components/orders/OrderPaymentCard"
 import OrderStatusActions from "@/components/orders/OrderStatusActions"
 import OrderStatusHero from "@/components/orders/OrderStatusHero"
 import { cancelOrder, getOrder, listOrderItems, updateOrderStatus } from "@/lib/api/orders"
+import { getCurrentStaff } from "@/lib/api/staff"
 import type { OrderStatus } from "@/lib/api/types"
 
 type ForwardStatus = Exclude<OrderStatus, "cancelled">
@@ -32,6 +33,13 @@ const OrderDetailPage = () => {
     queryFn: () => listOrderItems(orderId),
     staleTime: 30_000,
     enabled: !!orderId,
+  })
+
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
   })
 
   const statusMutation = useMutation({
@@ -88,6 +96,7 @@ const OrderDetailPage = () => {
       <OrderActionBar order={order}>
         <OrderStatusActions
           order={order}
+          currentUser={meQuery.data ?? null}
           onStatusChange={(newStatus) => statusMutation.mutate(newStatus)}
           onCancel={() => cancelMutation.mutate()}
           isUpdating={statusMutation.isPending || cancelMutation.isPending}

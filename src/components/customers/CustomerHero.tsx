@@ -9,10 +9,8 @@ import { FaWhatsapp } from "react-icons/fa6"
 import { LiaRobotSolid } from "react-icons/lia"
 
 import { getCustomerColor, getCustomerInitials } from "@/lib/customers/visuals"
-import {
-  getCustomerActivityTag,
-  getDisplayName,
-} from "@/lib/customers/utils"
+import { getCustomerActivityTag } from "@/lib/customers/utils"
+import CustomerNameLabel from "@/components/customers/CustomerNameLabel"
 import type { ConversationResponse, CustomerResponse } from "@/lib/api/types"
 
 type Props = {
@@ -32,11 +30,6 @@ const formatMonthYear = (iso: string): string => {
 
 const CustomerHero = ({ customer, conversations }: Props) => {
   const tag = getCustomerActivityTag(conversations)
-  const displayName = getDisplayName(customer)
-  const showSubName =
-    customer.display_name &&
-    customer.name &&
-    customer.display_name !== customer.name
 
   const base =
     "rounded-[7px] px-2.5 py-1 text-[10.5px] inline-flex items-center gap-1.5"
@@ -91,14 +84,9 @@ const CustomerHero = ({ customer, conversations }: Props) => {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 flex-wrap mb-1">
-            <h1 className="text-[18px] font-medium tracking-tight truncate">
-              {displayName}
+            <h1 className="text-[18px] tracking-tight truncate">
+              <CustomerNameLabel customer={customer} />
             </h1>
-            {showSubName && (
-              <span className="text-[11.5px] text-fg-muted truncate">
-                — {customer.name}
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] text-fg-muted">

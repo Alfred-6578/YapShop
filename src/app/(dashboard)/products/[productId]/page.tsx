@@ -10,9 +10,11 @@ import ProductHero from "@/components/products/ProductHero"
 import ProductMediaGallery from "@/components/products/ProductMediaGallery"
 import ProductDetailsCard from "@/components/products/ProductDetailsCard"
 import ProductOrganizationCard from "@/components/products/ProductOrganizationCard"
+import ProductVariantsCard from "@/components/products/ProductVariantsCard"
 import ProductVisibilityCard from "@/components/products/ProductVisibilityCard"
 import ProductMetaCard from "@/components/products/ProductMetaCard"
 import { deleteProduct, getProduct } from "@/lib/api/products"
+import { getCurrentStaff } from "@/lib/api/staff"
 
 const ProductDetailPage = () => {
   const router = useRouter()
@@ -35,6 +37,25 @@ const ProductDetailPage = () => {
     queryFn: () => getProduct(productId),
     staleTime: 30_000,
     enabled: !!productId && !deleteMutation.isSuccess,
+  })
+
+  // Debug log — inspect media + per-item is_live. Remove once the wire
+  // shape is verified.
+  if (productQuery.data) {
+    // eslint-disable-next-line no-console
+    console.log("[products/detail] media:", productQuery.data.media)
+    // eslint-disable-next-line no-console
+    console.log(
+      "[products/detail] is_live values:",
+      productQuery.data.media.map((m) => m.is_live),
+    )
+  }
+
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
   })
 
   if (productQuery.isLoading) {
@@ -73,6 +94,7 @@ const ProductDetailPage = () => {
     <>
       <ProductActionBar
         product={product}
+        currentUser={meQuery.data ?? null}
         onDelete={() => setConfirmingDelete(true)}
         isDeleting={deleteMutation.isPending}
       />
@@ -84,6 +106,10 @@ const ProductDetailPage = () => {
           <div className="flex flex-col gap-3 min-w-0">
             <ProductMediaGallery product={product} />
             <ProductDetailsCard product={product} />
+            <ProductVariantsCard
+              productId={product.id}
+              currentUser={meQuery.data ?? null}
+            />
             <ProductOrganizationCard product={product} />
           </div>
           <div className="flex flex-col gap-3 min-w-0">

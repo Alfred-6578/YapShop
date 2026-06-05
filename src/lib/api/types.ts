@@ -104,6 +104,11 @@ export interface LoginResponse extends AuthTokens {
 export interface MediaResponse {
   url: string;
   type: string;
+  /** Per-media visibility flag. "Live" media is real vendor-shot content
+   *  the AI can share as proof — distinct from stock photos which are
+   *  shown but never used as proof. Optional on read because older records
+   *  may predate the field; the form treats missing as live. */
+  is_live?: boolean;
 }
 
 export interface CategoryResponse {
@@ -152,6 +157,32 @@ export interface ProductResponse extends Omit<RawProductResponse, "price" | "tag
   price: number;
   tags: string[];
   media: MediaResponse[];
+}
+
+// ---------- product variants ----------
+/**
+ * Variants are independent SKUs of a product distinguished by free-form
+ * `attributes` (e.g. {size: "M", color: "Red"}). Price + inventory live on
+ * the variant; the product is just the umbrella. `product_variant_price`
+ * arrives as a stringified decimal (same wire pattern as product price).
+ */
+export interface RawProductVariantResponse {
+  id: string;
+  product_id: string;
+  /** Free-form key-value bag — values are usually strings in practice but
+   *  the backend's `Dict[str, Any]` lets numbers/booleans through too. */
+  attributes: Record<string, unknown>;
+  product_variant_price: string;
+  inventory_quantity: number;
+  low_stock_threshold: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductVariantResponse
+  extends Omit<RawProductVariantResponse, "product_variant_price"> {
+  product_variant_price: number;
 }
 
 // ---------- customers ----------

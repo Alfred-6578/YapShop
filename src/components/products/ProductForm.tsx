@@ -25,7 +25,8 @@ import Thumbnail from '@/components/ui/Thumbnail'
 import Toast from '@/components/ui/Toast'
 import Toggle from '@/components/ui/Toggle'
 import { listCategories } from '@/lib/api/categories'
-import type { MediaResponse, ProductResponse } from '@/lib/api/types'
+import type { MediaResponse, ProductResponse, StaffResponse } from '@/lib/api/types'
+import ProductVariantsCard from './ProductVariantsCard'
 import { getProductInitials, isVideoMedia } from '@/lib/products/visuals'
 
 /** Form-internal media slot. `_key` is a stable id we generate so colors and
@@ -35,8 +36,16 @@ import { getProductInitials, isVideoMedia } from '@/lib/products/visuals'
  *
  *  `file` is set for slots created by the file picker; their `url` is a
  *  `blob:` object URL for preview. Slots loaded from the server have no
- *  `file` and carry the server-side URL directly. */
-type FormMediaSlot = MediaResponse & { _key: string; file?: File }
+ *  `file` and carry the server-side URL directly.
+ *
+ *  `is_live` is per-media — flips this single item between "real proof"
+ *  (AI may share as evidence) and "stock". Promoted from a product-level
+ *  flag to per-media so a product can mix vendor photos with stock shots. */
+type FormMediaSlot = MediaResponse & {
+  _key: string
+  file?: File
+  is_live: boolean
+}
 
 export type ProductFormState = {
   name: string
@@ -46,13 +55,15 @@ export type ProductFormState = {
   category_id: string
   tags: string[]
   is_active: boolean
-  is_live: boolean
   media: FormMediaSlot[]
 }
 
 type Props = {
   mode: 'create' | 'edit'
   initialValues?: ProductResponse
+  /** Drives variant-card gating in edit mode. Optional so create-only
+   *  callers (which never render the variants UI) don't have to thread it. */
+  currentUser?: StaffResponse | null
   onSubmit: (values: ProductFormState) => void
   onCancel: () => void
   onDelete?: () => void
@@ -69,8 +80,15 @@ function toFormState(p: ProductResponse): ProductFormState {
     category_id: p.category_id ?? '',
     tags: p.tags,
     is_active: p.is_active,
-    is_live: p.is_live ?? false,
-    media: p.media.map((m, i) => ({ ...m, _key: `srv-${i}` })),
+    // Default missing is_live to true. Older media records predate the
+    // field and the operator wasn't asked at upload time — treating them
+    // as live matches the prior product-level default and avoids silently
+    // disabling existing vendor photos.
+    media: p.media.map((m, i) => ({
+      ...m,
+      _key: `srv-${i}`,
+      is_live: m.is_live ?? true,
+    })),
   }
 }
 
@@ -96,13 +114,13 @@ const EMPTY: ProductFormState = {
   category_id: '',
   tags: [],
   is_active: true,
-  is_live: true,
   media: [],
 }
 
 const ProductForm = ({
   mode,
   initialValues,
+  currentUser = null,
   onSubmit,
   onCancel,
   onDelete,
@@ -208,6 +226,10 @@ const ProductForm = ({
         type: file.type || 'image',
         _key: nextKey(),
         file,
+        // New uploads default to live — operator presumably wouldn't be
+        // taking the time to add real product photos otherwise. They can
+        // toggle off per item if it's actually a stock shot.
+        is_live: true,
       })
     }
 
@@ -241,6 +263,15 @@ const ProductForm = ({
       const next = [...s.media]
       const [item] = next.splice(index, 1)
       next.unshift(item)
+      return { ...s, media: next }
+    })
+  }
+
+  const handleToggleLive = (index: number) => {
+    setState((s) => {
+      if (index < 0 || index >= s.media.length) return s
+      const next = [...s.media]
+      next[index] = { ...next[index], is_live: !next[index].is_live }
       return { ...s, media: next }
     })
   }
@@ -448,6 +479,29 @@ const ProductForm = ({
                     {isVideoMedia(state.media[0]) ? 'Primary · Video' : 'Primary'}
                   </span>
 
+                  {/* is_live toggle for the primary item — full pill since
+                      there's plenty of room. Stock photos still show in the
+                      gallery; the flag only controls AI proof-sharing. */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleLive(0)}
+                    aria-pressed={state.media[0].is_live}
+                    aria-label={state.media[0].is_live ? 'Mark as stock' : 'Mark as live'}
+                    title={state.media[0].is_live ? 'Live — AI can share as proof' : 'Stock — AI will not share as proof'}
+                    className={`absolute bottom-2 left-2 inline-flex items-center gap-1.5 text-[10.5px] font-medium px-2 py-1 rounded-[6px] cursor-pointer transition-colors ${
+                      state.media[0].is_live
+                        ? 'bg-accent/85 text-accent-fg hover:bg-accent'
+                        : 'bg-black/55 text-fg-muted hover:bg-black/75'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        state.media[0].is_live ? 'bg-accent-fg' : 'bg-fg-subtle'
+                      }`}
+                    />
+                    {state.media[0].is_live ? 'Live' : 'Stock'}
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => handleRemovePhoto(0)}
@@ -476,7 +530,7 @@ const ProductForm = ({
                             handleSetPrimary(realIndex)
                           }
                         }}
-                        className="cursor-pointer transition-transform hover:scale-[1.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent rounded-[7px]"
+                        className="relative cursor-pointer transition-transform hover:scale-[1.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent rounded-[7px]"
                       >
                         {isVid && m.url ? (
                           <div className="relative h-16 w-16 rounded-[7px] overflow-hidden bg-black">
@@ -512,6 +566,33 @@ const ProductForm = ({
                             onRemove={() => handleRemovePhoto(realIndex)}
                           />
                         )}
+
+                        {/* Per-thumbnail is_live dot toggle. stopPropagation
+                            so it doesn't fire the parent's promote-to-primary
+                            handler. Solid green dot = live; outlined dot =
+                            stock. Click to flip. */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            e.preventDefault()
+                            handleToggleLive(realIndex)
+                          }}
+                          aria-pressed={m.is_live}
+                          aria-label={m.is_live ? 'Mark as stock' : 'Mark as live'}
+                          title={m.is_live ? 'Live' : 'Stock'}
+                          className={`absolute bottom-1 left-1 h-4 w-4 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
+                            m.is_live
+                              ? 'bg-accent ring-1 ring-black/40'
+                              : 'bg-black/60 ring-1 ring-white/40'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              m.is_live ? 'bg-accent-fg' : 'bg-fg-subtle'
+                            }`}
+                          />
+                        </button>
                       </div>
                     )
                   })}
@@ -528,30 +609,21 @@ const ProductForm = ({
             )}
 
             <p className="text-[10px] text-fg-subtle mt-2.5">
-              The primary item is what customers see in chat. Click any smaller one to swap it in. Images and videos, up to 15MB each.
+              The primary item is what customers see in chat. Click any smaller one to swap it in. The green dot marks <b>live</b> media — real vendor-shot photos and videos the AI may share as proof; <b>stock</b> media still displays in the gallery but is never used as evidence. Images and videos, up to 15MB each.
             </p>
           </Card>
 
-          {/* Variants */}
-          {/* <Card>
-            <CardHeader
-              title="Variants"
-              meta={<span className="text-fg-subtle text-[10.5px]">v2</span>}
+          {/* Variants — only in edit mode. Variants are a separate
+              resource (POST /product-variants/) and need a product_id to
+              attach to, which doesn't exist until the product itself has
+              been created. Create page hides this; users add variants on
+              the next visit after first save. */}
+          {mode === 'edit' && initialValues && (
+            <ProductVariantsCard
+              productId={initialValues.id}
+              currentUser={currentUser}
             />
-            <div className="py-3.5 flex flex-col items-center">
-              <p className="text-[11.5px] text-fg-muted mb-2.5 text-center">
-                No variants — sold as a single option.
-              </p>
-              <Button
-                variant="ghost"
-                icon={<HiPlus size={12} />}
-                className="text-[11.5px] px-3 py-1.5"
-                onClick={() => {}}
-              >
-                Add variants
-              </Button>
-            </div>
-          </Card> */}
+          )}
         </div>
 
         {/* Right column */}
@@ -565,13 +637,6 @@ const ProductForm = ({
                 description="Customers can browse and place orders"
                 checked={state.is_active}
                 onChange={(v) => set('is_active', v)}
-              />
-              <ToggleRow
-                title="Live media"
-                description="Real vendor-shot photo or video — AI can share it as proof"
-                checked={state.is_live}
-                onChange={(v) => set('is_live', v)}
-                topBorder
               />
             </div>
           </Card>
@@ -603,7 +668,7 @@ const ProductForm = ({
       {/* Footer */}
       <div className="flex items-center justify-between gap-2 px-4 py-3.5 border-t border-border bg-bg mt-auto">
         <div>
-          {mode === 'edit' && (
+          {mode === 'edit' && onDelete && (
             <button
               type="button"
               onClick={onDelete}

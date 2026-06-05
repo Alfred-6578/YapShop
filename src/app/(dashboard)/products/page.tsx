@@ -9,6 +9,8 @@ import FilterBar, { type ProductStatusFilter } from "@/components/products/Filte
 import ProductsTable from "@/components/products/ProductsTable"
 import Pagination from "@/components/ui/Pagination"
 import { listProducts, searchProducts } from "@/lib/api/products"
+import { getCurrentStaff } from "@/lib/api/staff"
+import { canCreateProduct } from "@/lib/products/permissions"
 import { useDebouncedValue } from "@/hooks/useDebouncedValue"
 
 const PAGE_SIZE = 6
@@ -17,6 +19,14 @@ const ProductsPage = () => {
   const [search, setSearch] = useState("")
   const [status, setStatus] = useState<ProductStatusFilter>("all")
   const [page, setPage] = useState(1)
+
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
+  })
+  const canCreate = canCreateProduct(meQuery.data ?? null)
 
   const debouncedSearch = useDebouncedValue(search, 300)
   const trimmedSearch = debouncedSearch.trim()
@@ -67,9 +77,11 @@ const ProductsPage = () => {
             : `${filtered.length} product${filtered.length === 1 ? "" : "s"} in your catalog`
         }
         action={
-          <Button variant="primary" href="/products/new" icon={<HiPlus size={14} />}>
-            New product
-          </Button>
+          canCreate ? (
+            <Button variant="primary" href="/products/new" icon={<HiPlus size={14} />}>
+              New product
+            </Button>
+          ) : null
         }
       />
       <FilterBar

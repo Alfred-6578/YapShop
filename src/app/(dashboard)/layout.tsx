@@ -3,6 +3,9 @@ import { Toaster } from "sonner"
 import DashboardShell from "@/components/layout/DashboardShell"
 import { RealtimeProvider } from "@/lib/realtime/RealtimeProvider"
 
+// Auth is enforced at the edge by middleware.ts — by the time this layout
+// renders, the user already has a `yapshop_authed` cookie. No client-side
+// route guard needed here.
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <RealtimeProvider>

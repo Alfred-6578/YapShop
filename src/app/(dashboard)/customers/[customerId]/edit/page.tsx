@@ -14,6 +14,7 @@ import {
   getCustomer,
   updateCustomer,
 } from "@/lib/api/customers"
+import { getCurrentStaff } from "@/lib/api/staff"
 
 const EditCustomerPage = () => {
   const router = useRouter()
@@ -28,6 +29,13 @@ const EditCustomerPage = () => {
       queryClient.invalidateQueries({ queryKey: ["customers", "list"] })
       router.push("/customers")
     },
+  })
+
+  const meQuery = useQuery({
+    queryKey: ["staff", "me"],
+    queryFn: getCurrentStaff,
+    staleTime: 10 * 60_000,
+    retry: false,
   })
 
   const customerQuery = useQuery({
@@ -96,6 +104,7 @@ const EditCustomerPage = () => {
     <>
       <CustomerForm
         customer={customerQuery.data}
+        currentUser={meQuery.data ?? null}
         onSubmit={(values) => updateMutation.mutate(values)}
         onCancel={() => router.push(`/customers/${customerId}`)}
         onDelete={() => setConfirmingDelete(true)}

@@ -10,7 +10,11 @@ import {
   HiXMark,
 } from "react-icons/hi2"
 
-import type { OrderResponse, OrderStatus } from "@/lib/api/types"
+import type { OrderResponse, OrderStatus, StaffResponse } from "@/lib/api/types"
+import {
+  canCancelOrder,
+  canChangeOrderStatus,
+} from "@/lib/orders/permissions"
 
 type ForwardStatus = Exclude<OrderStatus, "cancelled">
 
@@ -36,11 +40,14 @@ const getNextAction = (current: OrderStatus): NextAction | null => {
   }
 }
 
-const canCancel = (current: OrderStatus): boolean =>
+const isCancellableStatus = (current: OrderStatus): boolean =>
   current !== "delivered" && current !== "cancelled"
 
 type Props = {
   order: OrderResponse
+  /** Drives role-based gating. When the user can't change status, the
+   *  forward-action button and cancel kebab both disappear. */
+  currentUser: StaffResponse | null
   onStatusChange: (newStatus: ForwardStatus) => void
   onCancel: () => void
   isUpdating: boolean
@@ -49,6 +56,7 @@ type Props = {
 
 const OrderStatusActions = ({
   order,
+  currentUser,
   onStatusChange,
   onCancel,
   isUpdating,
@@ -56,7 +64,9 @@ const OrderStatusActions = ({
 }: Props) => {
   const [kebabOpen, setKebabOpen] = useState(false)
   const nextAction = getNextAction(order.status)
-  const canCancelOrder = canCancel(order.status)
+  const showForward = !!nextAction && canChangeOrderStatus(currentUser)
+  const showCancel =
+    isCancellableStatus(order.status) && canCancelOrder(currentUser)
 
   const handleCancelClick = () => {
     setKebabOpen(false)
@@ -75,7 +85,7 @@ const OrderStatusActions = ({
         </span>
       )}
 
-      {nextAction && (
+      {showForward && nextAction && (
         <button
           type="button"
           onClick={() => onStatusChange(nextAction.value)}
@@ -96,7 +106,7 @@ const OrderStatusActions = ({
         </button>
       )}
 
-      {canCancelOrder && (
+      {showCancel && (
         <>
           <button
             type="button"
@@ -128,9 +138,13 @@ const OrderStatusActions = ({
         </>
       )}
 
-      {!nextAction && !canCancelOrder && (
+      {!showForward && !showCancel && (
         <span className="text-[11px] text-fg-subtle italic">
-          {order.status === "delivered" ? "Order completed" : "Order cancelled"}
+          {order.status === "delivered"
+            ? "Order completed"
+            : order.status === "cancelled"
+              ? "Order cancelled"
+              : "View only"}
         </span>
       )}
     </div>

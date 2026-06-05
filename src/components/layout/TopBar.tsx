@@ -4,9 +4,9 @@ import { HiOutlineBell } from 'react-icons/hi2'
 
 import SearchTrigger from './SearchTrigger'
 import BrandMark from './BrandMark'
+import UserMenu from './UserMenu'
 import ThemeToggle from '@/components/ui/ThemeToggle'
 import IconButton from '@/components/ui/IconButton'
-import Avatar from '@/components/ui/Avatar'
 import ConnectionStatus from '@/components/ui/ConnectionStatus'
 
 const segmentLabels: Record<string, string> = {
@@ -69,7 +69,7 @@ const TopBar = () => {
           badge
         />
         <div className="md:hidden">
-          <Avatar name="Admin" size="sm" />
+          <UserMenu placement="topbar" />
         </div>
       </div>
     </header>
