@@ -16,6 +16,7 @@ import {
 import Button from '@/components/ui/Button'
 import Card from '@/components/ui/Card'
 import CardHeader from '@/components/ui/CardHeader'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import Field from '@/components/ui/Field'
 import Input from '@/components/ui/Input'
 import Select from '@/components/ui/Select'
@@ -67,6 +68,18 @@ type Props = {
   onSubmit: (values: ProductFormState) => void
   onCancel: () => void
   onDelete?: () => void
+  /** Immediate server-side delete for an existing media item. Called when
+   *  the user removes a slot that was loaded from the server (not a fresh
+   *  upload). The form shows confirmation, awaits this, and only drops the
+   *  slot from local state on success. Newly-uploaded blob slots skip this
+   *  and are removed locally — they were never on the server to begin with. */
+  onDeleteExistingMedia?: (url: string) => Promise<void>
+  /** Immediate server-side live/stock toggle for an existing media item.
+   *  Called on toggle click for slots loaded from the server. The form
+   *  flips its local state optimistically and reverts if this rejects.
+   *  Fresh uploads keep using local state only — the flag is sent with
+   *  the file on save. */
+  onUpdateExistingMediaLive?: (url: string, is_live: boolean) => Promise<void>
   isSubmitting?: boolean
   submitError?: Error | null
 }
@@ -124,6 +137,8 @@ const ProductForm = ({
   onSubmit,
   onCancel,
   onDelete,
+  onDeleteExistingMedia,
+  onUpdateExistingMediaLive,
   isSubmitting = false,
   submitError = null,
 }: Props) => {
@@ -135,6 +150,15 @@ const ProductForm = ({
     price: false,
   })
   const [validationToast, setValidationToast] = useState<string | null>(null)
+
+  // Confirmation state for deleting an existing (server-side) media item.
+  // Newly-uploaded blob slots delete instantly; only items already on the
+  // server prompt + hit the API, since that delete is unrecoverable and
+  // happens outside the form's normal save flow.
+  const [pendingMediaDelete, setPendingMediaDelete] = useState<
+    { url: string; key: string } | null
+  >(null)
+  const [isDeletingMedia, setIsDeletingMedia] = useState(false)
 
   // Simulated upload progress. We don't get real bytes from `fetch`, so we
   // run a decay curve that *looks* like an upload: fast at first, slowing
@@ -248,13 +272,45 @@ const ProductForm = ({
 
   const handleRemovePhoto = (index: number) => {
     const removed = state.media[index]
-    if (removed?.file && removed.url.startsWith('blob:')) {
+    if (!removed) return
+
+    // Server-side item with a delete handler wired: open confirmation. The
+    // dialog drives the actual remove on confirm. Fresh uploads (have a
+    // File) never went to the server, so just drop them locally.
+    if (!removed.file && onDeleteExistingMedia) {
+      setPendingMediaDelete({ url: removed.url, key: removed._key })
+      return
+    }
+
+    if (removed.file && removed.url.startsWith('blob:')) {
       URL.revokeObjectURL(removed.url)
     }
     set(
       'media',
       state.media.filter((_, i) => i !== index),
     )
+  }
+
+  const handleConfirmMediaDelete = async () => {
+    if (!pendingMediaDelete || !onDeleteExistingMedia) return
+    const { url, key } = pendingMediaDelete
+    setIsDeletingMedia(true)
+    try {
+      await onDeleteExistingMedia(url)
+      // Drop the matching slot by its stable _key — index can shift if a
+      // second delete races, so an index-based filter would be unsafe.
+      setState((s) => ({
+        ...s,
+        media: s.media.filter((m) => m._key !== key),
+      }))
+      setPendingMediaDelete(null)
+    } catch (err) {
+      setValidationToast(
+        err instanceof Error ? err.message : 'Failed to delete media',
+      )
+    } finally {
+      setIsDeletingMedia(false)
+    }
   }
 
   const handleSetPrimary = (index: number) => {
@@ -268,11 +324,36 @@ const ProductForm = ({
   }
 
   const handleToggleLive = (index: number) => {
+    const slot = state.media[index]
+    if (!slot) return
+    const nextLive = !slot.is_live
+
+    // Optimistic flip — UI updates immediately, no perceived latency.
     setState((s) => {
       if (index < 0 || index >= s.media.length) return s
       const next = [...s.media]
-      next[index] = { ...next[index], is_live: !next[index].is_live }
+      next[index] = { ...next[index], is_live: nextLive }
       return { ...s, media: next }
+    })
+
+    // Fresh upload (still local): the flag travels with the file on save,
+    // no server call yet. Existing server items hit PATCH immediately.
+    if (slot.file || !onUpdateExistingMediaLive) return
+
+    const key = slot._key
+    const url = slot.url
+    onUpdateExistingMediaLive(url, nextLive).catch((err) => {
+      // Revert the optimistic flip by _key (index may have shifted if
+      // another mutation reordered the list while this was in flight).
+      setState((s) => ({
+        ...s,
+        media: s.media.map((m) =>
+          m._key === key ? { ...m, is_live: !nextLive } : m,
+        ),
+      }))
+      setValidationToast(
+        err instanceof Error ? err.message : 'Failed to update media',
+      )
     })
   }
 
@@ -351,7 +432,7 @@ const ProductForm = ({
             <span className="text-fg font-medium">{breadcrumbName}</span>
           )}
         </nav>
-        {mode === 'edit' && (
+        {/* {mode === 'edit' && (
           <button
             type="button"
             aria-label="More actions"
@@ -359,7 +440,7 @@ const ProductForm = ({
           >
             <HiEllipsisHorizontal size={16} />
           </button>
-        )}
+        )} */}
         <Button variant="ghost" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
@@ -653,7 +734,10 @@ const ProductForm = ({
                   placeholder={categories ? 'Choose category' : 'Loading…'}
                 />
               </Field>
-              <Field label="Tags">
+              <Field
+                label="Tags"
+                hint="Type a tag and press Enter to add it. Click the × on a tag to remove it, or press Backspace on an empty input to delete the last one."
+              >
                 <TagsInput
                   value={state.tags}
                   onChange={(tags) => set('tags', tags)}
@@ -686,6 +770,20 @@ const ProductForm = ({
           {saveButton}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingMediaDelete !== null}
+        destructive
+        title="Delete this media?"
+        message="The file is removed from this product immediately and can't be recovered. Other product details aren't touched."
+        confirmLabel="Delete media"
+        cancelLabel="Keep it"
+        isPending={isDeletingMedia}
+        onConfirm={handleConfirmMediaDelete}
+        onCancel={() => {
+          if (!isDeletingMedia) setPendingMediaDelete(null)
+        }}
+      />
     </div>
   )
 }

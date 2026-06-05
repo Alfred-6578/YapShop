@@ -10,7 +10,13 @@ import {
 
 import ConfirmDialog from "@/components/ui/ConfirmDialog"
 import ProductForm from "@/components/products/ProductForm"
-import { deleteProduct, getProduct, updateProduct } from "@/lib/api/products"
+import {
+  deleteProduct,
+  deleteProductMedia,
+  getProduct,
+  updateProduct,
+  updateProductMedia,
+} from "@/lib/api/products"
 import { getCurrentStaff } from "@/lib/api/staff"
 import { canDeleteProduct, canEditProduct } from "@/lib/products/permissions"
 
@@ -41,16 +47,56 @@ const EditProductPage = () => {
     },
   })
 
+  // Immediate per-media delete (separate from the form's save flow). The
+  // server returns the updated product, which we drop straight into the
+  // detail cache so any other consumers (detail page, etc.) refresh too.
+  // The form removes the slot from its own local state on success.
+  const deleteMediaMutation = useMutation({
+    mutationFn: (url: string) => deleteProductMedia(productId, url),
+    onSuccess: (product) => {
+      queryClient.setQueryData(["products", "detail", productId], product)
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] })
+      queryClient.invalidateQueries({ queryKey: ["products", "search"] })
+    },
+  })
+
+  // Immediate per-media is_live toggle. The form does an optimistic flip
+  // and reverts on rejection; on success the server's updated product
+  // syncs into the detail cache so the next mount renders the right flag.
+  const updateMediaMutation = useMutation({
+    mutationFn: ({ url, is_live }: { url: string; is_live: boolean }) =>
+      updateProductMedia(productId, url, { is_live }),
+    onSuccess: (product) => {
+      queryClient.setQueryData(["products", "detail", productId], product)
+      queryClient.invalidateQueries({ queryKey: ["products", "list"] })
+      queryClient.invalidateQueries({ queryKey: ["products", "search"] })
+    },
+  })
+
   const productQuery = useQuery({
     queryKey: ["products", "detail", productId],
     queryFn: () => getProduct(productId),
     staleTime: 30_000,
     // Skip refetch once the product has been deleted — removeQueries clears the
-    // cache, but this hook is still mounted until router.push unmounts the page,
-    // and without this gate React Query would immediately re-run getProduct on
-    // the deleted id and 404.
+    // cache, but this hook is still mounted until router.push invokes unmount.
     enabled: !!productId && !deleteMutation.isSuccess,
   })
+
+  // Debug log — what the server returned for this product, especially the
+  // per-media is_live values that should hydrate the form. Remove once the
+  // round-trip is verified.
+  if (productQuery.data) {
+    // eslint-disable-next-line no-console
+    console.log("[products/edit] loaded:", productQuery.data)
+    // eslint-disable-next-line no-console
+    console.log(
+      "[products/edit] server media is_live:",
+      productQuery.data.media.map((m) => ({
+        url: m.url,
+        is_live: m.is_live,
+      })),
+    )
+  }
 
   const meQuery = useQuery({
     queryKey: ["staff", "me"],
@@ -119,7 +165,21 @@ const EditProductPage = () => {
         mode="edit"
         initialValues={productQuery.data}
         currentUser={me}
-        onSubmit={(values) =>
+        onSubmit={(values) => {
+          // Debug log — full form state + per-media is_live being sent.
+          // Compare against the "[products/edit] server media is_live:" log
+          // to confirm the toggles you flipped actually made it into submit.
+          // eslint-disable-next-line no-console
+          console.log("[products/edit] submitting values:", values)
+          // eslint-disable-next-line no-console
+          console.log(
+            "[products/edit] submit media is_live:",
+            values.media.map((m) => ({
+              kind: m.file ? "upload" : "keep",
+              url: m.url,
+              is_live: m.is_live,
+            })),
+          )
           updateMutation.mutate({
             name: values.name,
             price: values.price,
@@ -138,9 +198,13 @@ const EditProductPage = () => {
                 : { url: m.url, is_live: m.is_live },
             ),
           })
-        }
+        }}
         onCancel={() => router.push("/products")}
         onDelete={canDelete ? () => setConfirmingDelete(true) : undefined}
+        onDeleteExistingMedia={(url) => deleteMediaMutation.mutateAsync(url).then(() => undefined)}
+        onUpdateExistingMediaLive={(url, is_live) =>
+          updateMediaMutation.mutateAsync({ url, is_live }).then(() => undefined)
+        }
         isSubmitting={updateMutation.isPending || deleteMutation.isPending}
         submitError={updateMutation.error ?? deleteMutation.error}
       />

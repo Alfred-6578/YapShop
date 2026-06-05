@@ -50,7 +50,21 @@ const NewProductPage = () => {
   return (
     <ProductForm
       mode="create"
-      onSubmit={(values) =>
+      onSubmit={(values) => {
+        // Debug log — full form state + per-media is_live being sent on
+        // create. Mirrors the edit page logs so create vs. update are easy
+        // to compare. Remove once the round-trip is verified.
+        // eslint-disable-next-line no-console
+        console.log("[products/new] submitting values:", values)
+        // eslint-disable-next-line no-console
+        console.log(
+          "[products/new] submit media is_live:",
+          values.media.map((m) => ({
+            kind: m.file ? "upload" : "keep",
+            url: m.url,
+            is_live: m.is_live,
+          })),
+        )
         mutation.mutate({
           name: values.name,
           price: values.price,
@@ -65,7 +79,7 @@ const NewProductPage = () => {
             .filter((m) => m.file)
             .map((m) => ({ file: m.file!, is_live: m.is_live })),
         })
-      }
+      }}
       onCancel={() => router.push("/products")}
       isSubmitting={mutation.isPending}
       submitError={mutation.error}
