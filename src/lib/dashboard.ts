@@ -1,37 +1,24 @@
 "use client";
 
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
+import {
+  getDashboardKpis,
+  getLowStock,
+  getRevenue,
+  getTopProducts,
+} from "./api/analytics";
 import { listConversations } from "./api/conversations";
 import { listHandoffs } from "./api/handoffs";
-import { listOrderItems, listOrders } from "./api/orders";
+import { listOrders } from "./api/orders";
 import type {
   HumanHandOffResponse,
   OrderStatus,
 } from "./api/types";
 
-/* ---- date helpers ---- */
-function startOfToday(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-function startOfMonth(): number {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
-}
-function daysAgo(n: number): number {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-function dayKey(iso: string): string {
-  return iso.slice(0, 10);
-}
-
-/** Shared key for every orders-derived hook. One fetch, many selects. */
+/* ---- Shared keys ---- */
 const ORDERS_KEY = ["orders", "list"] as const;
+const KPIS_KEY = ["analytics", "dashboard"] as const;
 
 /* ---- KPIs ---- */
 export interface DashboardStats {
@@ -41,42 +28,58 @@ export interface DashboardStats {
   pendingHandoffs: number;
 }
 
+/**
+ * KPI source migrated from client-side orders aggregation to the dedicated
+ * `/analytics/dashboard` endpoint. Three changes:
+ *   1) `ordersToday` + `revenueMonth` come from the server now — no more
+ *      iterating the full orders list to count today's rows.
+ *   2) `pendingHandoffs` is finally a real number, sourced from a shared
+ *      pending-handoffs query (same cache key as RailHandoffQueue, so the
+ *      two consumers share one fetch).
+ *   3) `activeChats` still uses the conversations list — analytics doesn't
+ *      surface a live-chats count.
+ */
 export function useDashboardStats() {
-  const queries = useQueries({
-    queries: [
-      { queryKey: ORDERS_KEY, queryFn: listOrders },
-      // /conversations takes no filter params — fetch all, filter client-side.
-      { queryKey: ["conversations", "all"], queryFn: listConversations },
-      // Handoffs query temporarily disabled: /handoffs/pending requires auth,
-      // and without a login flow yet any 401 here forces a redirect to /login.
-      // Re-enable once login is wired and we have a real token.
-    ],
+  const kpis = useQuery({
+    queryKey: KPIS_KEY,
+    queryFn: getDashboardKpis,
+    staleTime: 60_000,
   });
-  const [orders, conversations] = queries;
 
-  const today = startOfToday();
-  const month = startOfMonth();
+  const conversations = useQuery({
+    queryKey: ["conversations", "all"],
+    queryFn: listConversations,
+    staleTime: 30_000,
+  });
+
+  // Shared cache key with RailHandoffQueue — single fetch even when both
+  // are mounted at the same time on the dashboard.
+  const pendingHandoffs = useQuery({
+    queryKey: ["handoffs", "list", { status: "pending" }],
+    queryFn: () => listHandoffs({ status: "pending" }),
+    staleTime: 30_000,
+  });
 
   const stats: DashboardStats = {
-    ordersToday:
-      orders.data?.filter((o) => new Date(o.created_at).getTime() >= today).length ?? 0,
-    revenueMonth:
-      orders.data
-        ?.filter(
-          (o) =>
-            new Date(o.created_at).getTime() >= month &&
-            o.payment_status === "completed",
-        )
-        .reduce((sum, o) => sum + o.total_amount, 0) ?? 0,
+    ordersToday: kpis.data?.orders_today ?? 0,
+    revenueMonth: kpis.data?.revenue_this_month ?? 0,
     activeChats:
       conversations.data?.filter((c) => c.status === "active").length ?? 0,
-    pendingHandoffs: 0, // see comment above — restore when auth is in place
+    // Backend may not honor `?status=pending` yet; client-filter as a safety
+    // net (matches the rail's defense-in-depth approach).
+    pendingHandoffs: (pendingHandoffs.data ?? []).filter(
+      (h) => h.status === "pending",
+    ).length,
   };
 
   return {
     stats,
-    isLoading: queries.some((q) => q.isLoading),
-    isError: queries.some((q) => q.isError),
+    /** Full KPI payload — surface new fields (new_customers_*, totals,
+     *  revenue_today, etc.) when widgets want them. */
+    kpis: kpis.data ?? null,
+    isLoading:
+      kpis.isLoading || conversations.isLoading || pendingHandoffs.isLoading,
+    isError: kpis.isError || conversations.isError || pendingHandoffs.isError,
   };
 }
 
@@ -122,34 +125,58 @@ export function useOrderStatusBreakdown() {
   });
 }
 
-/* ---- Revenue trend (last N days, bucketed by day) ---- */
+/* ---- Revenue trend (last N days) ---- */
 export interface TrendPoint { date: string; amount: number; }
 
+/**
+ * Day-bucketed revenue trend. Server now buckets — request `period=day`
+ * over a [start_date, end_date] window. Previously we fetched every order
+ * and bucketed client-side; the new flow scales to large catalogs.
+ *
+ * One gotcha: the server returns ONLY days that had revenue. The previous
+ * client-side version produced a full N-day series with zero buckets, which
+ * the AreaChart needs to render a continuous x-axis. We rebuild that here
+ * by walking N days and pulling each day's amount from the response (zero
+ * when absent).
+ */
 export function useRevenueTrend(days = 30) {
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = new Date(end);
+  start.setDate(start.getDate() - (days - 1));
+
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+
   return useQuery({
-    queryKey: ORDERS_KEY,
-    queryFn: listOrders,
-    select: (orders): TrendPoint[] => {
-      const since = daysAgo(days);
-      const buckets = new Map<string, number>();
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        buckets.set(dayKey(d.toISOString()), 0);
+    queryKey: ["analytics", "revenue", { period: "day", startStr, endStr }],
+    queryFn: () =>
+      getRevenue({ period: "day", start_date: startStr, end_date: endStr }),
+    staleTime: 60_000,
+    select: (resp): TrendPoint[] => {
+      // Map server points by their period field — keys vary by backend
+      // ("2026-06-05", "2026-06-05T00:00:00Z", etc.). Use the leading
+      // YYYY-MM-DD slice as a normalized key.
+      const byDate = new Map<string, number>();
+      for (const p of resp.items) {
+        const key = p.period.slice(0, 10);
+        byDate.set(key, (byDate.get(key) ?? 0) + p.revenue);
       }
-      for (const o of orders) {
-        if (o.payment_status !== "completed") continue;
-        if (new Date(o.created_at).getTime() < since) continue;
-        const k = dayKey(o.created_at);
-        if (buckets.has(k)) buckets.set(k, (buckets.get(k) ?? 0) + o.total_amount);
+
+      const out: TrendPoint[] = [];
+      for (let i = 0; i < days; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        out.push({ date: key, amount: byDate.get(key) ?? 0 });
       }
-      return Array.from(buckets, ([date, amount]) => ({ date, amount }));
+      return out;
     },
   });
 }
 
 /* ---- Top products ---- */
-export interface TopProduct {
+export interface DashboardTopProduct {
   product_id: string;
   name: string;
   units: number;
@@ -158,84 +185,55 @@ export interface TopProduct {
 }
 
 /**
- * Top-selling products by units over all available orders.
- *
- * EXPENSIVE: this is an N+1 fetch (one orders list + one items call per
- * order). Fine for demo volume; for production, ask the backend for a
- * /stats/top-products endpoint and replace this hook body. The signature
- * (and the widget that consumes it) does not change.
+ * Server-aggregated now. Was an N+1 fetch (orders list + items per order);
+ * single call replaces it. Same consumer shape so the widget doesn't change.
  */
 export function useTopProducts({ limit = 5 }: { limit?: number } = {}) {
   return useQuery({
-    queryKey: ["top-products", limit],
-    queryFn: async (): Promise<TopProduct[]> => {
-      const orders = await listOrders();
-
-      // Fan out item fetches in parallel. Catch per-order so a single
-      // failed items call doesn't nuke the whole aggregation — that one
-      // order's items just don't get counted.
-      const itemsLists = await Promise.all(
-        orders.map((o) => listOrderItems(o.id).catch(() => [])),
-      );
-
-      const agg = new Map<string, { name: string; units: number; revenue: number }>();
-      for (const items of itemsLists) {
-        for (const it of items) {
-          const cur = agg.get(it.product_id) ?? {
-            name: it.product_name,
-            units: 0,
-            revenue: 0,
-          };
-          cur.units += it.quantity;
-          cur.revenue += it.subtotal;
-          agg.set(it.product_id, cur);
-        }
-      }
-
-      const rows = Array.from(agg, ([product_id, v]) => ({ product_id, ...v }))
-        .sort((a, b) => b.units - a.units)
-        .slice(0, limit);
-
-      const top = rows[0]?.units ?? 1;
-      return rows.map((r) => ({ ...r, pct: r.units / top }));
+    queryKey: ["analytics", "top-products", { limit }],
+    queryFn: () => getTopProducts({ limit }),
+    staleTime: 5 * 60_000,
+    select: (items): DashboardTopProduct[] => {
+      const top = items[0]?.total_quantity ?? 1;
+      return items.map((p) => ({
+        product_id: p.product_id,
+        name: p.product_name,
+        units: p.total_quantity,
+        revenue: p.total_revenue,
+        pct: top > 0 ? p.total_quantity / top : 0,
+      }));
     },
-    staleTime: 5 * 60_000, // expensive — let it sit 5min before refetching
   });
 }
 
 /* ---- Low stock ---- */
 /**
- * Consumer-facing shape for a low-stock row. Endpoint-independent on purpose:
- * when we discover where variants/inventory live, the new service normalizes
- * into this shape and neither this hook nor the widget changes.
+ * Consumer-facing shape for a low-stock row. Now backed by the real
+ * `/analytics/inventory/low-stock` endpoint; the prior stub returned [].
  */
 export interface LowStockItem {
   /** Stable id — variant id if variants exist, else product id. */
   id: string;
   product_name: string;
-  /** e.g. "size M", "one size". Omit for products without variants. */
+  /** e.g. "size M", "one size". Server-side endpoint doesn't return
+   *  variant labels yet — left undefined until it does. */
   variant_label?: string;
   quantity: number;
   threshold: number;
 }
 
-/**
- * Low-stock inventory.
- *
- * BLOCKED: no inventory endpoint visible in the spec. The products response
- * doesn't carry variant/quantity data, so there's nothing to derive on the
- * frontend. Stubbed to [] so LowStockCard renders its empty state cleanly.
- *
- * TODO(backend): where do variants and inventory live? Either of these works:
- *   1) /api/v1/inventory/low-stock → returns the rows directly
- *   2) /api/v1/variants/ with inventory_quantity + low_stock_threshold on each
- *      → frontend filters client-side
- * Frontend needs: { id, product_name, variant_label?, quantity, threshold }[]
- */
 export function useLowStock() {
   return useQuery({
-    queryKey: ["inventory", "low-stock", "placeholder"],
-    queryFn: async (): Promise<LowStockItem[]> => [],
+    queryKey: ["analytics", "low-stock"],
+    queryFn: getLowStock,
+    staleTime: 2 * 60_000,
+    select: (resp): LowStockItem[] =>
+      resp.items.map((i) => ({
+        id: i.inventory_id,
+        product_name: i.product_name,
+        quantity: i.quantity_available,
+        threshold: i.low_stock_threshold,
+      })),
   });
 }
 

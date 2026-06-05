@@ -6,6 +6,7 @@ import ResponsiveTable, { Column } from '@/components/ui/ResponsiveTable'
 import StatusBadge from '@/components/ui/StatusBadge'
 import { useRecentOrders } from '@/lib/dashboard'
 import type { OrderResponse } from '@/lib/api/types'
+import Link from 'next/link'
 
 type Props = {
   onViewAll?: () => void
@@ -36,13 +37,12 @@ const RecentOrdersCard = ({ onViewAll }: Props) => {
       <CardHeader
         title="Recent orders"
         action={
-          <button
-            type="button"
-            onClick={onViewAll}
+          <Link
+            href="/orders"
             className="text-sm text-fg-muted hover:text-fg cursor-pointer"
           >
-            view all →
-          </button>
+            View all →
+          </Link>
         }
       />
       <div className="mt-2">
