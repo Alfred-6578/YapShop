@@ -185,6 +185,177 @@ export interface ProductVariantResponse
   product_variant_price: number;
 }
 
+// ---------- analytics ----------
+/**
+ * Every money field on the wire comes as a stringified decimal (same
+ * pattern as product price / order total). The analytics service in
+ * lib/api/analytics.ts normalizes these to numbers via parseAmount, so
+ * downstream callers see clean numeric fields.
+ */
+export interface RawDashboardKpis {
+  orders_today: number;
+  pending_orders: number;
+  revenue_today: string;
+  revenue_this_month: string;
+  active_handoffs: number;
+  new_customers_today: number;
+  new_customers_this_month: number;
+  total_customers: number;
+  total_products: number;
+}
+export interface DashboardKpis
+  extends Omit<RawDashboardKpis, "revenue_today" | "revenue_this_month"> {
+  revenue_today: number;
+  revenue_this_month: number;
+}
+
+export type RevenuePeriod = "day" | "week" | "month" | "year";
+
+export interface RawRevenuePoint {
+  period: string;
+  revenue: string;
+  order_count: number;
+}
+export interface RevenuePoint {
+  period: string;
+  revenue: number;
+  order_count: number;
+}
+
+export interface RawRevenueResponse {
+  items: RawRevenuePoint[];
+  total_revenue: string;
+  total_orders: number;
+}
+export interface RevenueResponse {
+  items: RevenuePoint[];
+  total_revenue: number;
+  total_orders: number;
+}
+
+export interface RawTopProduct {
+  product_id: string;
+  product_name: string;
+  total_quantity: number;
+  total_revenue: string;
+}
+export interface TopProduct {
+  product_id: string;
+  product_name: string;
+  total_quantity: number;
+  total_revenue: number;
+}
+
+export interface RawTopCustomer {
+  customer_id: string;
+  customer_name: string;
+  whatsapp_number: string;
+  total_orders: number;
+  total_spent: string;
+}
+export interface TopCustomer
+  extends Omit<RawTopCustomer, "total_spent"> {
+  total_spent: number;
+}
+
+export interface ConversionRateResponse {
+  total_carts: number;
+  total_orders: number;
+  /** 0..1 float per spec; widget can multiply by 100 for percentage display. */
+  conversion_rate: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface LowStockItem {
+  inventory_id: string;
+  product_id: string;
+  product_name: string;
+  quantity_available: number;
+  low_stock_threshold: number;
+}
+export interface LowStockResponse {
+  items: LowStockItem[];
+  total_low_stock: number;
+  total_out_of_stock: number;
+}
+
+export interface RawUnpaidOrder {
+  order_id: string;
+  order_number: string;
+  customer_name: string;
+  total_amount: string;
+  status: string;
+  payment_status: string;
+  created_at: string;
+}
+export interface UnpaidOrder
+  extends Omit<RawUnpaidOrder, "total_amount"> {
+  total_amount: number;
+}
+export interface RawReconciliationResponse {
+  unpaid_orders: RawUnpaidOrder[];
+  total_unpaid: number;
+  total_unpaid_amount: string;
+  total_paid: number;
+  total_paid_amount: string;
+}
+export interface ReconciliationResponse {
+  unpaid_orders: UnpaidOrder[];
+  total_unpaid: number;
+  total_unpaid_amount: number;
+  total_paid: number;
+  total_paid_amount: number;
+}
+
+export interface StaffPerformanceItem {
+  staff_id: string;
+  staff_name: string;
+  total_handoffs: number;
+  resolved_handoffs: number;
+  avg_resolution_minutes: number;
+}
+export interface StaffPerformanceResponse {
+  items: StaffPerformanceItem[];
+}
+
+export interface RawCustomerBySpend {
+  customer_id: string;
+  name: string;
+  whatsapp_number: string;
+  total_orders: number;
+  total_spent: string;
+  segment: string;
+  created_at: string;
+}
+export interface CustomerBySpend
+  extends Omit<RawCustomerBySpend, "total_spent"> {
+  total_spent: number;
+}
+export interface RawCustomersBySpendResponse {
+  items: RawCustomerBySpend[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+export interface CustomersBySpendResponse
+  extends Omit<RawCustomersBySpendResponse, "items"> {
+  items: CustomerBySpend[];
+}
+
+export interface RawRefundResponse {
+  order_id: string;
+  order_number: string;
+  refund_amount: string;
+  new_order_status: string;
+  new_payment_status: string;
+  reason: string;
+}
+export interface RefundResponse
+  extends Omit<RawRefundResponse, "refund_amount"> {
+  refund_amount: number;
+}
+
 // ---------- customers ----------
 export interface AddressResponse {
   id: string;

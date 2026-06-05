@@ -37,13 +37,13 @@ const ProductActionBar = ({
         <span className="text-fg font-medium">{product.name}</span>
       </nav>
 
-      <button
+      {/* <button
         type="button"
         aria-label="More actions"
         className="h-8 w-8 shrink-0 inline-flex items-center justify-center rounded-control border border-border text-fg-muted hover:text-fg hover:bg-card-hover cursor-pointer"
       >
         <HiEllipsisHorizontal size={16} />
-      </button>
+      </button> */}
 
       {showDelete && (
         <button

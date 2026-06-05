@@ -70,8 +70,9 @@ export interface ProductWritePayload {
   /**
    * Ordered list of every media slot the saved product should end up with.
    * New uploads (file) and kept-existing (url) interleave in display order.
-   * The wire encoding splits them: uploads get indexed fields, kept items
-   * collect into a single JSON `keep_media` field. See buildProductFormData.
+   * Wire encoding uses parallel multi-value FormData lists:
+   * `files`+`is_live` for uploads, `keep_media`+`keep_media_is_live` for
+   * kept items. See buildProductFormData.
    */
   media?: ProductMediaInput[];
 }
@@ -88,27 +89,36 @@ function buildProductFormData(payload: ProductWritePayload): FormData {
     form.append("tags", JSON.stringify(payload.tags));
   }
 
-  // Each uploaded file is paired with its is_live flag by INSERTION ORDER:
-  // both arrive at the server as parallel lists (FastAPI's `files: List[…]`
-  // + `is_live: List[bool]`), so the Nth `files` entry matches the Nth
-  // `is_live` entry. Appending them as a pair after each loop iteration
-  // keeps the alignment intact even if a non-file slot slips in later.
-  //
-  // Kept-existing items still encode as a single JSON `keep_media` field
-  // (URL + is_live per item). If backend also wants those interleaved with
-  // parallel `keep_media` / `keep_media_is_live` appends, we'll swap then.
-  const keeps: Array<{ url: string; is_live: boolean }> = [];
+  // Both new uploads and kept-existing items use the parallel multi-value
+  // pattern, paired by INSERTION ORDER:
+  //   - new uploads: `files` (file) + `is_live` ("true"/"false" string)
+  //   - kept items: `keep_media` (URL) + `keep_media_is_live` ("true"/"false")
+  // FastAPI reads each as `List[…]`; the Nth value in one list matches the
+  // Nth value in its sibling list. Strings "true"/"false" — not raw booleans
+  // — since FormData stringifies everything anyway and we want it explicit.
   for (const m of payload.media ?? []) {
     if ("file" in m) {
       form.append("files", m.file);
-      form.append("is_live", String(m.is_live));
+      form.append("is_live", m.is_live ? "true" : "false");
     } else {
-      keeps.push({ url: m.url, is_live: m.is_live });
+      form.append("keep_media", m.url);
+      form.append("keep_media_is_live", m.is_live ? "true" : "false");
     }
   }
-  if (keeps.length > 0) {
-    form.append("keep_media", JSON.stringify(keeps));
-  }
+
+  // Debug: dump every entry the FormData actually holds, with its JS type.
+  // Booleans never reach the wire — FormData coerces everything to string —
+  // but this log proves the keep_media_is_live values go out as "true"/"false"
+  // strings, not booleans. Remove once the round-trip is verified.
+  // eslint-disable-next-line no-console
+  console.log(
+    "[buildProductFormData] entries:",
+    Array.from(form.entries()).map(([k, v]) => ({
+      key: k,
+      value: v instanceof File ? `<File ${v.name}>` : v,
+      type: typeof v,
+    })),
+  );
 
   return form;
 }
@@ -145,5 +155,48 @@ export async function getProduct(id: string): Promise<ProductResponse> {
 
 export async function getProductBySku(sku: string): Promise<ProductResponse> {
   const raw = await api<RawProductResponse>(`/products/sku/${encodeURIComponent(sku)}`);
+  return normalizeProduct(raw);
+}
+
+/**
+ * Delete a single media item from a product. The server identifies the
+ * item by its full URL (passed in the JSON body, NOT the path or a query
+ * param), and responds with the updated ProductResponse — the same shape
+ * as getProduct, with the deleted item removed from `media`.
+ *
+ * Unlike form-based "kept_media" reconciliation, this is immediate: the
+ * delete commits before the user saves any other form changes. Callers
+ * should sync local UI state from the returned product, not from their
+ * own optimistic copy.
+ */
+export async function deleteProductMedia(
+  productId: string,
+  mediaUrl: string,
+): Promise<ProductResponse> {
+  const raw = await api<RawProductResponse>(`/products/${productId}/media`, {
+    method: "DELETE",
+    body: { media_url: mediaUrl },
+  });
+  return normalizeProduct(raw);
+}
+
+/**
+ * Patch a single media item on a product — currently only `is_live` is
+ * supported by the backend. Server identifies the item by URL in the
+ * JSON body and returns the updated ProductResponse.
+ *
+ * Use this for toggling live/stock on items that already exist server-side.
+ * For new uploads (still in the form, not saved), keep the flag in local
+ * state — it travels with the file on the eventual POST/PUT.
+ */
+export async function updateProductMedia(
+  productId: string,
+  mediaUrl: string,
+  patch: { is_live: boolean },
+): Promise<ProductResponse> {
+  const raw = await api<RawProductResponse>(`/products/${productId}/media`, {
+    method: "PATCH",
+    body: { media_url: mediaUrl, ...patch },
+  });
   return normalizeProduct(raw);
 }
