@@ -1,13 +1,23 @@
 "use client"
+import { useMemo } from "react"
 import Link from "next/link"
-import { useQuery } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { HiOutlineCheckCircle } from "react-icons/hi2"
 
 import { listHandoffs } from "@/lib/api/handoffs"
+import { getConversation } from "@/lib/api/conversations"
+import { getCustomer } from "@/lib/api/customers"
+import { getDisplayName } from "@/lib/customers/utils"
+import { parseServerTime } from "@/lib/utils/format"
 import HandoffQueueItem from "./HandoffQueueItem"
 
+// FastAPI sends naive ISO timestamps (no `Z` suffix). new Date() parses
+// those as LOCAL time, so a row created moments ago looks hours old in
+// UTC+1. parseServerTime treats naive strings as UTC, matching the server.
 const formatWait = (iso: string): string => {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  const ms = parseServerTime(iso)
+  if (Number.isNaN(ms)) return ""
+  const mins = Math.max(0, Math.floor((Date.now() - ms) / 60_000))
   if (mins < 1) return "<1m"
   if (mins < 60) return `${mins}m`
   const hours = Math.floor(mins / 60)
@@ -29,6 +39,66 @@ const RailHandoffQueue = () => {
 
   const pending = (data ?? []).filter((h) => h.status === "pending")
   const items = pending.slice(0, 5)
+
+  // Fallback name resolution. The nested `conversation.customer_name` is
+  // the fast path; when the server omits it, fetch the conversation (to
+  // read customer_id) then the customer (for name/display_name). Both go
+  // through useQueries so React Query dedupes and caches per id —
+  // ["conversations","detail",id] and ["customers","detail",id] match the
+  // keys used by the detail/edit pages so cache hits are free across the app.
+  const itemsNeedingFetch = useMemo(
+    () => items.filter((h) => !h.conversation?.customer_name),
+    [items],
+  )
+
+  const conversationQueries = useQueries({
+    queries: itemsNeedingFetch.map((h) => ({
+      queryKey: ["conversations", "detail", h.conversation_id],
+      queryFn: () => getConversation(h.conversation_id),
+      staleTime: 60_000,
+    })),
+  })
+
+  const customerIdsToFetch = useMemo(() => {
+    const ids = new Set<string>()
+    for (const q of conversationQueries) {
+      if (q.data) ids.add(q.data.customer_id)
+    }
+    return Array.from(ids)
+  }, [conversationQueries])
+
+  const customerQueries = useQueries({
+    queries: customerIdsToFetch.map((id) => ({
+      queryKey: ["customers", "detail", id],
+      queryFn: () => getCustomer(id),
+      staleTime: 60_000,
+    })),
+  })
+
+  const customerByConversationId = useMemo(() => {
+    const customerById = new Map<string, ReturnType<typeof getDisplayName>>()
+    const fetchedCustomers = customerQueries
+      .map((q) => q.data)
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+    for (const c of fetchedCustomers) customerById.set(c.id, getDisplayName(c))
+
+    const map = new Map<string, string>()
+    for (let i = 0; i < itemsNeedingFetch.length; i++) {
+      const conv = conversationQueries[i]?.data
+      if (!conv) continue
+      const name = customerById.get(conv.customer_id)
+      if (name) map.set(itemsNeedingFetch[i].conversation_id, name)
+    }
+    return map
+  }, [itemsNeedingFetch, conversationQueries, customerQueries])
+
+  const resolveName = (h: (typeof items)[number]): string => {
+    return (
+      h.conversation?.customer_name ||
+      customerByConversationId.get(h.conversation_id) ||
+      "Customer"
+    )
+  }
 
   return (
     <section>
@@ -69,7 +139,7 @@ const RailHandoffQueue = () => {
               className="block"
             >
               <HandoffQueueItem
-                name={h.conversation?.customer_name ?? "Customer"}
+                name={resolveName(h)}
                 waited={formatWait(h.requested_at ?? h.created_at)}
                 active={i === 0}
               />
