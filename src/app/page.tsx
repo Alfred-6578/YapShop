@@ -19,8 +19,8 @@ const LoginForm = () => {
   const searchParams = useSearchParams()
   const next = searchParams?.get("next") ?? "/dashboard"
 
-  const [username, setUsername] = useState("")
-  const [password, setPassword] = useState("")
+  const [username, setUsername] = useState("admin@store.com") // Pre-fill for easier local testing. Remove in production.
+  const [password, setPassword] = useState("password") // Pre-fill for easier local testing. Remove in production.
 
   const loginMutation = useMutation({
     mutationFn: ({ u, p }: { u: string; p: string }) => login(u, p),
@@ -69,7 +69,7 @@ const LoginForm = () => {
             <span className="text-[11px] text-fg-muted">Email or username</span>
             <Input
               value={username}
-              onChange={setUsername}
+              onChange={()=>{}}
               placeholder="you@example.com"
               icon={<HiOutlineEnvelope size={14} />}
               autoComplete="username"
@@ -81,7 +81,7 @@ const LoginForm = () => {
             <Input
               type="password"
               value={password}
-              onChange={setPassword}
+              onChange={()=>{}}
               placeholder="••••••••"
               icon={<HiOutlineLockClosed size={14} />}
               autoComplete="current-password"
