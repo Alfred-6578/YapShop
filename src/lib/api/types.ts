@@ -560,6 +560,7 @@ export interface ConversationSummary {
   ai_enabled: boolean;
   handoff_status?: HandoffStatus | null;
   customer_name?: string | null;
+  customer_display_name?: string | null;
   customer_whatsapp_number?: string | null;
 }
 

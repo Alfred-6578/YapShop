@@ -20,6 +20,7 @@ import {
   canResolveHandoff,
 } from "@/lib/handoffs/permissions"
 import { getDisplayName } from "@/lib/customers/utils"
+import { parseServerTime } from "@/lib/utils/format"
 import type {
   CustomerResponse,
   HandoffTriggerType,
@@ -67,8 +68,13 @@ const initialsFromName = (name?: string | null): string => {
   return (tokens[0][0] + tokens[tokens.length - 1][0]).toUpperCase()
 }
 
+// FastAPI sends naive ISO timestamps (no `Z` suffix). new Date() parses
+// those as LOCAL time, so a row created moments ago looks an hour old in
+// UTC+1. parseServerTime treats naive strings as UTC, matching the server.
 const formatMinutesSince = (iso: string): string => {
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  const ms = parseServerTime(iso)
+  if (Number.isNaN(ms)) return ""
+  const mins = Math.max(0, Math.floor((Date.now() - ms) / 60_000))
   if (mins < 1) return "<1m"
   if (mins < 60) return `${mins}m`
   const hours = Math.floor(mins / 60)
@@ -143,9 +149,17 @@ const HandoffRow = ({
     pendingMutation?.id === handoff.id && pendingMutation.kind === "assign"
   const anyMutationOnPage = pendingMutation !== null
 
-  const customerName = customer ? getDisplayName(customer) : "Loading…"
-  const customerWa = customer?.whatsapp_number ?? ""
-  const initials = initialsFromName(customer?.name ?? customer?.display_name)
+  // Customer comes from the page-level conversation→customer lookup. While
+  // that resolves, the row falls back to the inline conversation summary
+  // fields (customer_name / customer_whatsapp_number) so it doesn't render
+  // a bare "Loading…" when the server has already given us something usable.
+  const inlineName = handoff.conversation?.customer_name ?? null
+  const inlineWa = handoff.conversation?.customer_whatsapp_number ?? ""
+  const customerName = customer
+    ? getDisplayName(customer)
+    : (inlineName ?? "Loading…")
+  const customerWa = customer?.whatsapp_number ?? inlineWa
+  const initials = initialsFromName(customer?.name ?? customer?.display_name ?? inlineName)
   const color = hashColor(handoff.conversation_id)
 
   // Prefer the nested staff summary (saves the list lookup); fall back to the

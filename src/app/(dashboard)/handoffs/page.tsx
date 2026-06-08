@@ -1,7 +1,12 @@
 "use client"
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { HiOutlineCloud } from "react-icons/hi2"
 
 import PageHeader from "@/components/products/PageHeader"
@@ -21,9 +26,12 @@ import {
   resolveHandoff,
 } from "@/lib/api/handoffs"
 import { getCurrentStaff, listStaff } from "@/lib/api/staff"
-import { listConversations } from "@/lib/api/conversations"
-import { listCustomers } from "@/lib/api/customers"
-import type { CustomerResponse } from "@/lib/api/types"
+import { getConversation, listConversations } from "@/lib/api/conversations"
+import { getCustomer, listCustomers } from "@/lib/api/customers"
+import type {
+  ConversationResponse,
+  CustomerResponse,
+} from "@/lib/api/types"
 
 const HandoffsPage = () => {
   const router = useRouter()
@@ -53,9 +61,10 @@ const HandoffsPage = () => {
     retry: false,
   })
 
-  // Handoff list doesn't include customer info on the nested `conversation`.
-  // Fetch conversations + customers and build a conversation_id → customer
-  // lookup so each row can render the right name and WhatsApp number.
+  // Handoff list doesn't reliably include customer info on the nested
+  // `conversation`. Fetch conversations + customers and build a
+  // conversation_id → customer lookup so each row can render the right
+  // name and WhatsApp number.
   const conversationsQuery = useQuery({
     queryKey: ["conversations", "list"],
     queryFn: listConversations,
@@ -71,17 +80,94 @@ const HandoffsPage = () => {
   const handoffs = handoffsQuery.data ?? []
   const staff = staffQuery.data ?? []
 
-  const customerByConversationId = useMemo(() => {
-    const map = new Map<string, CustomerResponse>()
-    const conversations = conversationsQuery.data ?? []
-    const customers = customersQuery.data ?? []
-    const customerById = new Map(customers.map((c) => [c.id, c]))
-    for (const conv of conversations) {
-      const cust = customerById.get(conv.customer_id)
-      if (cust) map.set(conv.id, cust)
+  // Stage 1 — for any handoff whose conversation isn't in the bulk
+  // conversations list, fetch it individually so we can read customer_id.
+  // Shares the ["conversations","detail",id] key with the conversation
+  // detail page so cache hits are free.
+  const conversationById = useMemo(() => {
+    const map = new Map<string, ConversationResponse>()
+    for (const c of conversationsQuery.data ?? []) map.set(c.id, c)
+    return map
+  }, [conversationsQuery.data])
+
+  const missingConversationIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const h of handoffs) {
+      if (!conversationById.has(h.conversation_id)) ids.add(h.conversation_id)
+    }
+    return Array.from(ids)
+  }, [handoffs, conversationById])
+
+  const conversationQueries = useQueries({
+    queries: missingConversationIds.map((id) => ({
+      queryKey: ["conversations", "detail", id],
+      queryFn: () => getConversation(id),
+      staleTime: 30_000,
+    })),
+  })
+
+  const fetchedConversationById = useMemo(() => {
+    const map = new Map<string, ConversationResponse>()
+    for (const q of conversationQueries) {
+      if (q.data) map.set(q.data.id, q.data)
     }
     return map
-  }, [conversationsQuery.data, customersQuery.data])
+  }, [conversationQueries])
+
+  // Stage 2 — for any customer_id referenced by a handoff conversation but
+  // missing from the bulk customers list, fetch it individually. Shares
+  // the ["customers","detail",id] key with the customer detail/edit pages.
+  const customerById = useMemo(() => {
+    const map = new Map<string, CustomerResponse>()
+    for (const c of customersQuery.data ?? []) map.set(c.id, c)
+    return map
+  }, [customersQuery.data])
+
+  const missingCustomerIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const h of handoffs) {
+      const conv =
+        conversationById.get(h.conversation_id) ??
+        fetchedConversationById.get(h.conversation_id)
+      if (conv && !customerById.has(conv.customer_id)) {
+        ids.add(conv.customer_id)
+      }
+    }
+    return Array.from(ids)
+  }, [handoffs, conversationById, fetchedConversationById, customerById])
+
+  const customerQueries = useQueries({
+    queries: missingCustomerIds.map((id) => ({
+      queryKey: ["customers", "detail", id],
+      queryFn: () => getCustomer(id),
+      staleTime: 60_000,
+    })),
+  })
+
+  const customerByConversationId = useMemo(() => {
+    const map = new Map<string, CustomerResponse>()
+    const fetchedCustomerById = new Map<string, CustomerResponse>()
+    for (const q of customerQueries) {
+      if (q.data) fetchedCustomerById.set(q.data.id, q.data)
+    }
+    for (const h of handoffs) {
+      const conv =
+        conversationById.get(h.conversation_id) ??
+        fetchedConversationById.get(h.conversation_id)
+      if (!conv) continue
+      const cust =
+        customerById.get(conv.customer_id) ??
+        fetchedCustomerById.get(conv.customer_id)
+      if (cust) map.set(h.conversation_id, cust)
+    }
+    return map
+  }, [
+    handoffs,
+    conversationById,
+    fetchedConversationById,
+    customerById,
+    customerQueries,
+  ])
 
   const claimMutation = useMutation({
     mutationFn: claimNextHandoff,
